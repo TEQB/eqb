@@ -1,0 +1,12 @@
+CREATE INDEX idx_past_questions_course_id ON past_questions(course_id);
+CREATE INDEX idx_past_questions_status ON past_questions(status);
+CREATE INDEX idx_past_questions_level ON past_questions(level);
+CREATE INDEX idx_past_questions_year ON past_questions(year);
+CREATE INDEX idx_profiles_auth_user_id ON profiles(auth_user_id);
+CREATE INDEX idx_profiles_department_id ON profiles(department_id);
+CREATE INDEX idx_profiles_is_locked ON profiles(is_locked);
+CREATE INDEX idx_solutions_question_id ON solutions(question_id);
+CREATE INDEX idx_solutions_votes ON solutions((upvotes - downvotes) DESC);
+CREATE INDEX idx_flags_question_id ON flags(question_id);
+CREATE INDEX idx_courses_scope ON courses(scope);
+CREATE INDEX idx_courses_department_id ON courses(department_id);
