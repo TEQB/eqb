@@ -108,17 +108,30 @@ export function Sidebar({
         "flex h-full flex-col overflow-y-auto transition-all duration-300 ease-in-out",
         collapsed ? "overflow-x-hidden" : "",
       )}>
-      <div className={cn(
-        "flex pt-5 pb-3",
-        collapsed ? "justify-start px-3" : "justify-between px-4",
-      )}>
-        <Link href="/" className="flex items-center gap-2 min-w-0" onClick={onClose}>
-          {collapsed ? (
-            <Image src="/icon.png" alt="EQB logo" width={24} height={24} className="h-6 w-6 object-contain" />
-          ) : (
-            <Image src="/logo.png" alt="EQB logo" width={120} height={40} className="h-10 w-auto object-contain" priority />
-          )}
-        </Link>
+     <div className={cn(
+  "flex pt-4 pb-3",
+  collapsed ? "justify-start px-3" : "justify-start px-4",
+)}>
+        <Link href="/" className="flex items-center min-w-0" onClick={onClose}>
+  {collapsed ? (
+    <Image 
+      src="/icon.png" 
+      alt="EQB" 
+      width={32} 
+      height={32} 
+      className="h-10 w-10 object-contain" 
+    />
+  ) : (
+    <Image 
+      src="/logo.png" 
+      alt="EQB logo" 
+      width={160} 
+      height={48} 
+      className="h-16 w-auto object-contain" 
+      priority 
+    />
+  )}
+</Link>
       </div>
 
       <div className={cn("py-3", collapsed ? "px-0" : "px-3")}>

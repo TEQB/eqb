@@ -30,16 +30,16 @@ export function LandingNavbar() {
           : "bg-white/55 backdrop-blur-md",
       )}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 py-3 lg:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:px-8">
         <Link href="#home" className="flex items-center">
           <Image
-            src="/logo.png"
-            alt="EQB logo"
-            width={160}
-            height={48}
-            className="h-12 w-auto object-contain"
-            priority
-          />
+  src="/logo.png"
+  alt="EQB logo"
+  width={180}
+  height={44}
+  className="h-16 w-auto object-contain"
+  priority
+/>
         </Link>
 
         <nav className="hidden items-center gap-2 md:flex">

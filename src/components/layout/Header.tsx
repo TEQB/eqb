@@ -77,8 +77,15 @@ export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userNam
       )}
 
       <Link href="/dashboard" className="flex items-center">
-        <Image src="/drklogo.png" alt="EQB logo" width={120} height={40} className="h-10 w-auto object-contain" style={{ width: "auto", height: "2.5rem" }} priority />
-      </Link>
+  <Image 
+    src="/drklogo.png" 
+    alt="EQB logo" 
+    width={160} 
+    height={48} 
+    className="h-11 w-auto object-contain" 
+    priority 
+  />
+</Link>
 
       <div className="hidden flex-1 lg:block">
         <SearchBar />

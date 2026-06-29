@@ -33,17 +33,16 @@ export function AuthShell({ headline, subtext, children, page }: AuthShellProps)
           <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
 
           <div className="relative flex h-full flex-col justify-between px-10 py-10">
-            <Link href="/" className="inline-flex items-center gap-3 self-start">
-              <Image
-                src="/drklogo.png"
-                alt="EQB logo"
-                width={160}
-                height={48}
-                className="h-12 w-auto object-contain"
-                style={{ width: "auto", height: "3rem" }}
-                priority
-              />
-            </Link>
+            <Link href="/" className="inline-flex items-start self-start">
+  <Image
+    src="/drklogo.png"
+    alt="EQB logo"
+    width={200}
+    height={64}
+    className="h-18 w-auto object-contain"
+    priority
+  />
+</Link>
 
             <div className="max-w-xl">
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/65">
@@ -89,12 +88,21 @@ export function AuthShell({ headline, subtext, children, page }: AuthShellProps)
 
           <div className="mx-auto w-full max-w-xl">
             <div className="mb-5 flex items-center gap-3 lg:hidden">
-              <Image src="/logo.png" alt="EQB logo" width={120} height={36} className="h-9 w-auto object-contain" />
+              <Link href="/" className="">
+                <Image
+                  src="/logo.png"
+                  alt="EQB logo"
+                  width={180}
+                  height={44}
+                  className="h-16 w-auto object-contain"
+                  priority
+                />
+              </Link>
               <p className="text-xs text-gray-500">Built by students, for students.</p>
             </div>
 
             <div className="rounded-[2rem] bg-white/90 px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
-              <Image src="/logo.png" alt="EQB logo" width={80} height={80} className="mx-auto h-16 w-auto object-contain" />
+              {/* <Image src="/logo.png" alt="EQB logo" width={200} height={72} className="mx-auto h-22 w-auto object-contain" /> */}
               <div className="mt-6">{children}</div>
             </div>
 
