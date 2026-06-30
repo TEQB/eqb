@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 type AdminProfile = {
   id: string;
@@ -45,11 +46,14 @@ export function AdminManagement() {
 
     if (res.ok) {
       setMsg({ text: `Invitation sent to ${email}`, ok: true });
+      toast.success(`Invitation sent to ${email}`);
       setEmail("");
       setFullName("");
       await loadAdmins();
     } else {
-      setMsg({ text: data.error || "Failed to send invitation", ok: false });
+      const err = data.error || "Failed to send invitation";
+      setMsg({ text: err, ok: false });
+      toast.error(err);
     }
     setSending(false);
   };

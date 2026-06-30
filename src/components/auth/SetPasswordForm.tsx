@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toaster";
 
 export function SetPasswordForm() {
   const searchParams = useSearchParams();
@@ -24,11 +25,13 @@ export function SetPasswordForm() {
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       setShakeKey((k) => k + 1);
+      toast.warning("Password must be at least 8 characters");
       return;
     }
     if (password !== confirm) {
       setError("Passwords don't match");
       setShakeKey((k) => k + 1);
+      toast.warning("Passwords don't match");
       return;
     }
 
@@ -43,6 +46,7 @@ export function SetPasswordForm() {
     if (!res.ok) {
       const { error: createErr } = await res.json();
       setError(createErr || "Failed to create account");
+      toast.error(createErr || "Failed to create account");
       setIsSubmitting(false);
       return;
     }
@@ -54,10 +58,12 @@ export function SetPasswordForm() {
 
     if (signInError) {
       setError("Account created but sign in failed");
+      toast.error("Account created but sign in failed");
       setIsSubmitting(false);
       return;
     }
 
+    toast.success("Account ready — welcome to EQB!");
     window.location.href = "/dashboard";
   };
 

@@ -10,6 +10,7 @@ import { loginSchema } from "@/lib/validations";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toaster";
 
 type FormData = z.infer<typeof loginSchema>;
 
@@ -39,9 +40,11 @@ export function LoginForm() {
     if (signInError) {
       setError(signInError.message);
       setShakeKey((k) => k + 1);
+      toast.error(signInError.message);
       return;
     }
 
+    toast.success("Logged in. Taking you to your dashboard...");
     window.location.href = "/dashboard";
   };
 
@@ -51,6 +54,7 @@ export function LoginForm() {
     setResetEmail(resetEmail.trim());
     if (!resetEmail.trim()) {
       setError("Enter your university email");
+      toast.warning("Enter your university email");
       return;
     }
 
@@ -67,10 +71,12 @@ export function LoginForm() {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Failed to send reset email");
+      toast.error(data.error || "Failed to send reset email");
       return;
     }
 
     setMode("reset-sent");
+    toast.success("Reset email sent — check your inbox");
   };
 
   if (mode === "forgot-password" || mode === "reset-sent") {

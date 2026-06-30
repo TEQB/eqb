@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { validateEnv } from "@/lib/env";
+import { Toaster } from "@/components/ui/toaster";
 
 // Fail fast at build time if env vars are missing
 if (typeof window === "undefined") {
@@ -63,6 +64,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white">
         {children}
+        <Toaster />
       </body>
     </html>
   );

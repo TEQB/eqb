@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 export function SettingsForm({
   initialDays,
@@ -28,7 +29,14 @@ export function SettingsForm({
       body: formData,
     });
     const data = await res.json();
-    setMessage(res.ok ? "Saved successfully" : data.error || "Error");
+    if (res.ok) {
+      setMessage("Saved successfully");
+      toast.success("Settings saved");
+    } else {
+      const err = data.error || "Error";
+      setMessage(err);
+      toast.error(err);
+    }
     setLoading(false);
   };
 

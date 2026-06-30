@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "@/components/ui/toaster";
 
 export function AdminLoginForm({ secret }: { secret: string }) {
   const supabase = createClient();
@@ -43,6 +44,7 @@ export function AdminLoginForm({ secret }: { secret: string }) {
       });
       if (sessionErr) {
         setError(sessionErr.message);
+        toast.error(sessionErr.message);
         setMode("login");
         return;
       }
@@ -50,6 +52,7 @@ export function AdminLoginForm({ secret }: { secret: string }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setError("Could not verify identity");
+        toast.error("Could not verify identity");
         setMode("login");
         return;
       }
@@ -64,6 +67,7 @@ export function AdminLoginForm({ secret }: { secret: string }) {
       if (profile?.role !== "super_admin") {
         await supabase.auth.signOut();
         setError("Not authorized as admin");
+        toast.error("Not authorized as admin");
         setMode("login");
         return;
       }
@@ -82,6 +86,7 @@ export function AdminLoginForm({ secret }: { secret: string }) {
 
     if (signInError) {
       setError(signInError.message);
+      toast.error(signInError.message);
       setLoading(false);
       return;
     }
@@ -89,6 +94,7 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     const userId = (await supabase.auth.getUser()).data.user?.id;
     if (!userId) {
       setError("Could not verify identity");
+      toast.error("Could not verify identity");
       setLoading(false);
       return;
     }
@@ -103,10 +109,12 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     if (profile?.role !== "super_admin") {
       await supabase.auth.signOut();
       setError("Not authorized as admin");
+      toast.error("Not authorized as admin");
       setLoading(false);
       return;
     }
 
+    toast.success("Welcome back, admin");
     window.location.href = `/admin/${secret}/dashboard`;
   };
 
@@ -117,10 +125,12 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
     if (!PASSWORD_REGEX.test(newPassword)) {
       setError("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
+      toast.warning("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
       return;
     }
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match");
+      toast.warning("Passwords do not match");
       return;
     }
 
@@ -128,10 +138,12 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
     if (updateErr) {
       setError(updateErr.message);
+      toast.error(updateErr.message);
       setLoading(false);
       return;
     }
 
+    toast.success("Password set — opening admin dashboard");
     window.location.href = `/admin/${secret}/dashboard`;
   };
 
@@ -151,11 +163,13 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Failed to send reset email");
+      toast.error(data.error || "Failed to send reset email");
       setLoading(false);
       return;
     }
 
     setMode("reset-sent");
+    toast.success("Reset email sent");
     setLoading(false);
   };
 

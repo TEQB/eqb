@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/toaster";
 
 interface RatingStarsProps {
   solutionId: string;
@@ -53,6 +54,7 @@ export function RatingStars({
     } = await supabase.auth.getUser();
     if (!user) {
       setError("Sign in to rate");
+      toast.warning("Sign in to rate this solution");
       setSubmitting(false);
       return;
     }
@@ -65,6 +67,7 @@ export function RatingStars({
     const profile = rawProfile as unknown as { id: string } | null;
     if (!profile) {
       setError("Profile not found");
+      toast.error("Profile not found — try signing out and back in");
       setSubmitting(false);
       return;
     }
@@ -84,6 +87,7 @@ export function RatingStars({
 
     if (upsertError) {
       setError("Failed to save rating");
+      toast.error("Failed to save rating");
       setSubmitting(false);
       return;
     }
@@ -97,6 +101,11 @@ export function RatingStars({
       setSum((p) => p + (rating - initialUserRating));
     }
     setSubmitting(false);
+    toast.success(
+      initialUserRating == null
+        ? `Rated ${rating} star${rating > 1 ? "s" : ""}`
+        : `Updated rating to ${rating} star${rating > 1 ? "s" : ""}`,
+    );
     onRated?.();
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 export function FeedbackForm() {
   const [message, setMessage] = useState("");
@@ -16,6 +17,7 @@ export function FeedbackForm() {
     const trimmed = message.trim();
     if (trimmed.length < 10) {
       setError("Please write at least 10 characters so we can understand your idea.");
+      toast.warning("Please write at least 10 characters");
       return;
     }
 
@@ -29,12 +31,14 @@ export function FeedbackForm() {
 
     if (!res.ok) {
       setError(data.error || "Could not send feedback");
+      toast.error(data.error || "Could not send feedback");
       setLoading(false);
       return;
     }
 
     setMessage("");
     setSuccess("Thanks. Your feedback has been sent to the admin team.");
+    toast.success("Thanks for the feedback! Sent to the admin team.");
     setLoading(false);
   };
 

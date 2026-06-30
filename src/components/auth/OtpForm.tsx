@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toaster";
 
 export function OtpForm() {
   const router = useRouter();
@@ -61,10 +62,12 @@ export function OtpForm() {
       const { error: verifyErr } = await res.json();
       setError(verifyErr || "Invalid code");
       setShakeKey((k) => k + 1);
+      toast.error(verifyErr || "Invalid code");
       setIsVerifying(false);
       return;
     }
 
+    toast.success("Code verified — finalizing your account...");
     const result = await res.json();
 
     if (result.hasPendingRegistration) {
@@ -93,6 +96,7 @@ export function OtpForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
+    toast.success("New code sent");
   };
 
   const formatTime = (seconds: number) => {

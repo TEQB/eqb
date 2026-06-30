@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sanitizeHtml } from "@/lib/utils";
+import { toast } from "@/components/ui/toaster";
 
 interface SolutionFormProps {
   questionId: string;
@@ -36,6 +37,7 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     const trimmedBody = body.trim();
     if (!trimmedBody && !solutionFile) {
       setError("Add text or a file");
+      toast.error("Add text or a file before submitting");
       return;
     }
 
@@ -46,6 +48,7 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     } = await supabase.auth.getUser();
     if (!user) {
       setIsSubmitting(false);
+      toast.error("You need to sign in to submit a solution");
       return;
     }
 
@@ -57,6 +60,7 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     const profile = rawProfile as unknown as { id: string } | null;
     if (!profile) {
       setIsSubmitting(false);
+      toast.error("Profile not found — sign out and try again");
       return;
     }
 
@@ -71,6 +75,7 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
       if (uploadErr) {
         setError("File upload failed");
         setIsSubmitting(false);
+        toast.error("File upload failed. Check the file and try again.");
         return;
       }
       fileUrl = `solutions/${filePath}`;
@@ -87,11 +92,13 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     if (insertError) {
       setError("Failed to submit solution.");
       setIsSubmitting(false);
+      toast.error("Failed to submit solution. Please try again.");
       return;
     }
 
     resetForm();
     setOpen(false);
+    toast.success("Solution posted — thanks for contributing!");
     router.refresh();
     setIsSubmitting(false);
   };
@@ -101,10 +108,12 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     if (!f) return;
     if (f.size > MAX_FILE_SIZE) {
       setError("File must be under 10MB");
+      toast.warning("File must be under 10MB");
       return;
     }
     if (!VALID_TYPES.includes(f.type)) {
       setError("Only PDF, JPG, or PNG files");
+      toast.warning("Only PDF, JPG, or PNG files are accepted");
       return;
     }
     setError("");

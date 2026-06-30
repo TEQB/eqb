@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { uploadSchema } from "@/lib/validations";
 import { FileDropzone } from "./FileDropzone";
+import { toast } from "@/components/ui/toaster";
 
 type UploadData = z.infer<typeof uploadSchema>;
 
@@ -65,6 +66,7 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to add course");
+        toast.error(data.error || "Failed to add course");
         return;
       }
       const created = data.course as Course;
@@ -74,8 +76,10 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       setNewCode("");
       setNewTitle("");
       setNewLevel("100");
+      toast.success("Course added");
     } catch {
       setError("Failed to add course");
+      toast.error("Failed to add course");
     } finally {
       setAddingCourse(false);
     }
@@ -85,6 +89,7 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
     async (data: UploadData) => {
       if (!file) {
         setError("Please select a file");
+        toast.warning("Please select a file first");
         return;
       }
       setError("");
@@ -93,7 +98,10 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        toast.error("You need to sign in to upload");
+        return;
+      }
 
       const { data: rawProfile, error: profileError } = await supabase
         .from("profiles")
@@ -103,12 +111,14 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       if (profileError) {
         setError("Profile error: " + profileError.message);
         setUploadState("idle");
+        toast.error("Profile error: " + profileError.message);
         return;
       }
       const profile = rawProfile as unknown as { id: string } | null;
       if (!profile) {
         setError("Profile not found");
         setUploadState("idle");
+        toast.error("Profile not found");
         return;
       }
 
@@ -125,6 +135,7 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       if (uploadError) {
         setError("Upload failed. Please try again.");
         setUploadState("idle");
+        toast.error("Upload failed. Please try again.");
         return;
       }
 
@@ -148,6 +159,7 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       if (insertError) {
         setError(insertError.message || "Failed to create question record.");
         setUploadState("idle");
+        toast.error(insertError.message || "Failed to create question record.");
         return;
       }
 
@@ -166,10 +178,12 @@ export function UploadForm({ courses: initialCourses }: { courses: Course[] }) {
       const result = await response.json();
 
       if (result.pass) {
+        toast.success("Upload approved — opening the question...");
         window.location.href = `/question/${questionId}`;
       } else {
         setRejectionReason(result.reason || "Upload rejected");
         setUploadState("rejected");
+        toast.error(result.reason || "Upload rejected by AI review");
       }
     },
     [file, supabase, courses],

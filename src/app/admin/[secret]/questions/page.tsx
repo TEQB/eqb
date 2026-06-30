@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "@/components/ui/toaster";
 
 interface Question {
   id: string;
@@ -75,12 +76,19 @@ export default function AdminQuestionsPage({
     try {
       const res = await fetch(`/api/admin?${params}`);
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to load"); setLoading(false); return; }
+      if (!res.ok) {
+        const err = data.error || "Failed to load";
+        setError(err);
+        toast.error(err);
+        setLoading(false);
+        return;
+      }
       setQuestions(data.questions ?? []);
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages ?? 1);
     } catch {
       setError("Failed to load questions");
+      toast.error("Failed to load questions");
     }
     setLoading(false);
   }, [page, statusFilter, programmeFilter, levelFilter, searchQuery]);
@@ -96,10 +104,15 @@ export default function AdminQuestionsPage({
     const path = action === "approve" ? "restore-question" : action === "suspend" ? "suspend-question" : "delete-question";
     const res = await fetch(`/api/admin?action=${path}`, { method: "POST", body: formData });
     if (res.ok) {
+      toast.success(
+        action === "approve" ? "Question approved" : action === "suspend" ? "Question suspended" : "Question deleted",
+      );
       fetchQuestions();
     } else {
       const data = await res.json();
-      setError(data.error || "Action failed");
+      const err = data.error || "Action failed";
+      setError(err);
+      toast.error(err);
     }
   }
 

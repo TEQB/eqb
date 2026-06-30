@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "@/components/ui/toaster";
 import {
   Dialog,
   DialogContent,
@@ -55,12 +56,15 @@ export function FlagModal({ questionId }: FlagModalProps) {
     if (insertError) {
       if (insertError.code === "23505") {
         setError("You've already flagged this question");
+        toast.warning("You've already flagged this question");
       } else {
         setError("Something went wrong. Please try again.");
+        toast.error("Could not submit report. Please try again.");
       }
       return;
     }
 
+    toast.success("Report submitted — thanks for keeping EQB clean");
     setMessage("Thanks for reporting");
     setTimeout(() => {
       setOpen(false);

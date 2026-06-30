@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { registerSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/components/ui/toaster";
 
 type FormData = z.infer<typeof registerSchema>;
 
@@ -30,6 +31,7 @@ export function RegisterForm() {
   const [levels, setLevels] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [shakeKey, setShakeKey] = useState(0);
+  const domainEmailToastRef = useRef<string | null>(null);
 
   const {
     register,
@@ -110,9 +112,11 @@ export function RegisterForm() {
       const { error: otpErr } = await otpRes.json();
       setError(otpErr || "Failed to send OTP");
       setShakeKey((k) => k + 1);
+      toast.error(otpErr || "Failed to send OTP");
       return;
     }
 
+    toast.success("Verification code sent to your email");
     const params = new URLSearchParams({ email: data.email });
     router.push(`/register/verify?${params}`);
   };
@@ -143,6 +147,9 @@ export function RegisterForm() {
             const domain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN || "";
             if (e.target.value && !e.target.value.endsWith(domain)) {
               setError(`Only ${domain} emails are accepted`);
+              if (domainEmailToastRef.current) toast.dismiss(domainEmailToastRef.current);
+              const id = toast.warning(`Only ${domain} emails are accepted`);
+              domainEmailToastRef.current = id as string;
             } else {
               setError("");
             }

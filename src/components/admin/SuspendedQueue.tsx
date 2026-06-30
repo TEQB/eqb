@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 interface QueuedQuestion {
   id: string;
@@ -40,9 +41,14 @@ export function SuspendedQueue({ secret: _secret }: { secret: string }) {
     });
     if (res.ok) {
       setQuestions((prev) => prev.filter((q) => q.id !== id));
+      toast.success(
+        action === "restore" ? "Question restored" : "Question deleted",
+      );
     } else {
       const data = await res.json();
-      setError(data.error || "Action failed");
+      const err = data.error || "Action failed";
+      setError(err);
+      toast.error(err);
     }
   }
 

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { VerifiedToast } from "@/components/auth/VerifiedToast";
 import { AuthShell } from "@/components/auth/AuthShell";
 
 export default function LoginPage() {
@@ -12,6 +13,7 @@ export default function LoginPage() {
       headline="Welcome back. Your notes missed you."
       subtext="Log in to continue browsing, saving, and contributing to your programme's question bank on EQB."
     >
+      <VerifiedToast />
       <div className="text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.22em] text-gray-500">
           Log In

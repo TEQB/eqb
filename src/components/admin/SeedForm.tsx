@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 export function SeedForm({
   secret: _secret,
@@ -43,12 +44,15 @@ export function SeedForm({
 
     if (res.ok) {
       setMessage("Created successfully");
+      toast.success("Created successfully");
       (e.target as HTMLFormElement).reset();
       setIsGeneral(false);
       setScope("departmental");
       setDeptId("");
     } else {
-      setMessage(data.error || "Error");
+      const err = data.error || "Error";
+      setMessage(err);
+      toast.error(err);
     }
     setLoading(false);
   };

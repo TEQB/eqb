@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/ui/toaster";
 
 export function AdminRegisterForm({ secret }: { secret: string }) {
   const [step, setStep] = useState(0);
@@ -25,9 +26,11 @@ export function AdminRegisterForm({ secret }: { secret: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send OTP");
       setMessage("OTP sent to " + email);
+      toast.success("OTP sent to " + email);
       setStep(1);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to send OTP");
+      toast.error(e instanceof Error ? e.message : "Failed to send OTP");
     }
     setLoading(false);
   };
@@ -44,9 +47,11 @@ export function AdminRegisterForm({ secret }: { secret: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Invalid code");
       setMessage("Email verified");
+      toast.success("Email verified");
       setStep(2);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Verification failed");
+      toast.error(e instanceof Error ? e.message : "Verification failed");
     }
     setLoading(false);
   };
@@ -56,14 +61,17 @@ export function AdminRegisterForm({ secret }: { secret: string }) {
     const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
     if (!PASSWORD_REGEX.test(password)) {
       setError("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
+      toast.warning("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
       return;
     }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      toast.warning("Passwords do not match");
       return;
     }
     if (!fullName.trim()) {
       setError("Full name is required");
+      toast.warning("Full name is required");
       return;
     }
     setLoading(true);
@@ -76,12 +84,14 @@ export function AdminRegisterForm({ secret }: { secret: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create account");
       setMessage("Admin account created! Redirecting to login...");
+      toast.success("Admin account created");
       setStep(3);
       setTimeout(() => {
         window.location.href = `/admin/${secret}/login`;
       }, 1500);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Account creation failed");
+      toast.error(e instanceof Error ? e.message : "Account creation failed");
     }
     setLoading(false);
   };

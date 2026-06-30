@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "@/components/ui/toaster";
 
 export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   const supabase = createClient();
@@ -42,10 +43,12 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
     setMessage("");
     if (!file || !courseId) {
       setMessage("Select a course and file");
+      toast.warning("Select a course and file");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
       setMessage("File must be under 10MB");
+      toast.warning("File must be under 10MB");
       return;
     }
     setLoading(true);
@@ -80,10 +83,13 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
       if (!res.ok) throw new Error(data.error || "Failed to publish question");
 
       setMessage("Question published successfully");
+      toast.success("Question published successfully");
       setFile(null);
       (e.target as HTMLFormElement).reset();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Error uploading");
+      const msg = err instanceof Error ? err.message : "Error uploading";
+      setMessage(msg);
+      toast.error(msg);
     }
     setLoading(false);
   }
@@ -93,6 +99,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
     setNewCourseError("");
     if (!newCode.trim() || !newTitle.trim() || !newProgrammeId) {
       setNewCourseError("All fields are required");
+      toast.warning("All fields are required");
       return;
     }
     setCreatingCourse(true);
@@ -117,8 +124,11 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
       setNewTitle("");
       setNewProgrammeId("");
       setNewLevel("100");
+      toast.success("Course created");
     } catch (err) {
-      setNewCourseError(err instanceof Error ? err.message : "Error creating course");
+      const msg = err instanceof Error ? err.message : "Error creating course";
+      setNewCourseError(msg);
+      toast.error(msg);
     }
     setCreatingCourse(false);
   }

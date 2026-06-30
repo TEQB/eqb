@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
+import { toast } from "@/components/ui/toaster";
 
 type Tab = "faculties" | "programmes" | "courses";
 
@@ -75,6 +76,7 @@ export function DataOverview() {
 
     if (res.ok) {
       setMsg({ text: "Created successfully", ok: true });
+      toast.success("Created successfully");
       form.reset();
       setShowForm(false);
       await loadData();
@@ -84,7 +86,9 @@ export function DataOverview() {
         if (d.programmes) setAllProgrammes(d.programmes);
       }
     } else {
-      setMsg({ text: data.error || "Error", ok: false });
+      const err = data.error || "Error";
+      setMsg({ text: err, ok: false });
+      toast.error(err);
     }
   };
 
