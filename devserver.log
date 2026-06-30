@@ -1,0 +1,43 @@
+
+> unipastq@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 6.8s
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 1986ms (170 modules)
+ ○ Compiling /upload ...
+ ✓ Compiled /upload in 13.6s (1533 modules)
+ ✓ Compiled in 1234ms (696 modules)
+ ✓ Compiled in 254ms (682 modules)
+ GET /upload 200 in 16333ms
+ GET /upload 200 in 2577ms
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (102kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (250kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled in 1716ms (1503 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /upload 200 in 3395ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 815ms (1492 modules)
+ GET /_next/undefined 404 in 1052ms
+ ✓ Compiled in 2.7s (1517 modules)
+ ⨯ Internal error: Error: Unsupported Server Component type: Module
+    at e (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:269758)
+    at e (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:269654)
+    at eL (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:269809)
+    at eJ (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:275773)
+    at eV (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:276390)
+    at Timeout._onTimeout (C:\Users\ifeol\Desktop\Projects\PQB\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:266177)
+    at listOnTimeout (node:internal/timers:588:17)
+    at process.processTimers (node:internal/timers:523:7)
+digest: "4061718808"
+ ✓ Compiled in 1783ms (1517 modules)
+ ✓ Compiled in 1561ms (1517 modules)
+ ✓ Compiled in 702ms (693 modules)
+ ✓ Compiled in 963ms (693 modules)
+ ✓ Compiled in 1786ms (1515 modules)
+ GET /upload 200 in 2539ms

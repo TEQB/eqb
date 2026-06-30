@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
+import { queryLogs, getLogStats } from "@/lib/db-logger";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -327,6 +328,63 @@ export async function GET(req: NextRequest) {
             author_name: s.profiles?.full_name || "Unknown",
             author_email: authorEmailMap.get(s.profiles?.auth_user_id) || null,
           })),
+        });
+      }
+
+      case "list-logs": {
+        const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+        const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 200);
+        const level = req.nextUrl.searchParams.get("level") || undefined;
+        const event = req.nextUrl.searchParams.get("event") || undefined;
+        const userId = req.nextUrl.searchParams.get("userId") || undefined;
+        const ip = req.nextUrl.searchParams.get("ip") || undefined;
+        const dateFrom = req.nextUrl.searchParams.get("dateFrom") || undefined;
+        const dateTo = req.nextUrl.searchParams.get("dateTo") || undefined;
+        const search = req.nextUrl.searchParams.get("search") || undefined;
+
+        const { logs, total } = await queryLogs({ page, limit, level, event, userId, ip, dateFrom, dateTo, search });
+        return NextResponse.json({ logs, total, page, limit });
+      }
+
+      case "log-stats": {
+        const stats = await getLogStats();
+        const [{ data: dailyQuestions }, { data: dailySolutions }, { data: dailySignups }] = await Promise.all([
+          service.from("past_questions").select("created_at").gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+          service.from("solutions").select("created_at").gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+          service.from("profiles").select("created_at").eq("role", "student").gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+        ]);
+
+        const makeDayMap = () => {
+          const m: Record<string, number> = {};
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(); d.setDate(d.getDate() - i);
+            m[d.toISOString().slice(0, 10)] = 0;
+          }
+          return m;
+        };
+
+        const questionsByDay = makeDayMap();
+        const solutionsByDay = makeDayMap();
+        const signupsByDay = makeDayMap();
+
+        for (const q of (dailyQuestions ?? []) as { created_at: string }[]) {
+          const key = q.created_at?.slice(0, 10);
+          if (key && key in questionsByDay) questionsByDay[key]++;
+        }
+        for (const s of (dailySolutions ?? []) as { created_at: string }[]) {
+          const key = s.created_at?.slice(0, 10);
+          if (key && key in solutionsByDay) solutionsByDay[key]++;
+        }
+        for (const p of (dailySignups ?? []) as { created_at: string }[]) {
+          const key = p.created_at?.slice(0, 10);
+          if (key && key in signupsByDay) signupsByDay[key]++;
+        }
+
+        return NextResponse.json({
+          stats,
+          dailyQuestions: Object.entries(questionsByDay).map(([date, count]) => ({ date, count })),
+          dailySolutions: Object.entries(solutionsByDay).map(([date, count]) => ({ date, count })),
+          dailySignups: Object.entries(signupsByDay).map(([date, count]) => ({ date, count })),
         });
       }
 

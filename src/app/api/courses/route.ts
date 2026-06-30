@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { code, title, level } = await req.json();
+    const { code, title, level, scope = "departmental" } = await req.json();
 
     if (!code || !title || !level) {
       return NextResponse.json({ error: "code, title, and level are required" }, { status: 400 });
@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
         title,
         level: parseInt(level),
         department_id: profile.department_id,
-        scope: "departmental",
+        scope,
       } as never)
-      .select("id, code, title, level")
+      .select("id, code, title, level, scope")
       .single();
 
     if (error) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    logger.info({ event: "courses.created", message: "Course created by student", userId: user.id, metadata: { code, title } });
+    logger.info({ event: "courses.created", message: "Course created by student", userId: user.id, metadata: { code, title, scope } });
     return NextResponse.json({ course: newCourse });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

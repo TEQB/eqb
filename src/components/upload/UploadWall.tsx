@@ -9,6 +9,7 @@ interface Course {
   code: string;
   title: string;
   level: number;
+  scope: string;
 }
 
 export function UploadWall({ obligationDays }: { obligationDays: number }) {
@@ -24,14 +25,9 @@ export function UploadWall({ obligationDays }: { obligationDays: number }) {
 
       const { data: rawData } = await supabase
         .from("courses")
-        .select("id, code, title, level")
+        .select("id, code, title, level, scope")
         .order("level");
-      const coursesData = rawData as unknown as Array<{
-        id: string;
-        code: string;
-        title: string;
-        level: number;
-      }> | null;
+      const coursesData = rawData as unknown as Course[] | null;
 
       if (coursesData) setCourses(coursesData);
     }
