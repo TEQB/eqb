@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
-import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { sendEmail } from "@/lib/mailer";
 import { passwordResetTemplate } from "@/lib/email-templates";
 
 type ResetRole = "student" | "super_admin";
@@ -76,31 +76,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not generate reset link" }, { status: 500 });
     }
 
-    let resendErrorMsg: string | null = null;
     try {
       const { subject, html } = passwordResetTemplate(recoveryLink, role === "super_admin");
-      const { error: resendErr } = await getResendClient().emails.send({
-        from: RESEND_FROM_EMAIL,
-        to: email,
-        subject,
-        html,
-      });
-
-      if (resendErr) {
-        resendErrorMsg = resendErr.message;
-        logger.error({ event: "forgot_password.resend_error", message: "Resend API rejected email", ip, email, error: resendErr.message, metadata: { role } });
-      }
+      await sendEmail(email, subject, html);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      resendErrorMsg = msg;
-      logger.error({ event: "forgot_password.resend_error", message: "Resend threw an exception", ip, email, error: msg, metadata: { role } });
-    }
-
-    if (resendErrorMsg) {
+      logger.error({ event: "forgot_password.email_error", message: "Failed to send password reset email", ip, email, error: msg, metadata: { role } });
       return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
     }
 
-    logger.info({ event: "forgot_password.success", message: "Password reset email sent via Resend", ip, email, durationMs: Date.now() - start, metadata: { role } });
+    logger.info({ event: "forgot_password.success", message: "Password reset email sent", ip, email, durationMs: Date.now() - start, metadata: { role } });
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

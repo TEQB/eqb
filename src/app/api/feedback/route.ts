@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { getAdminRecipientEmails } from "@/lib/admin-recipients";
-import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { sendEmail } from "@/lib/mailer";
 import { feedbackTemplate } from "@/lib/email-templates";
 
 export async function POST(req: Request) {
@@ -91,22 +91,11 @@ export async function POST(req: Request) {
 
       let emailFailed = false;
       try {
-        const { error: emailErr } = await getResendClient().emails.send({
-          from: RESEND_FROM_EMAIL,
-          to,
-          bcc,
-          subject,
-          html,
-        });
-
-        if (emailErr) {
-          emailFailed = true;
-          logger.error({ event: "feedback.email_failed", message: "Resend rejected feedback email", userId: user.id, error: emailErr.message });
-        }
+        await sendEmail(to, subject, html, bcc);
       } catch (err) {
         emailFailed = true;
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ event: "feedback.email_failed", message: "Resend threw an exception", userId: user.id, error: msg });
+        logger.error({ event: "feedback.email_failed", message: "Feedback email failed", userId: user.id, error: msg });
       }
 
       if (emailFailed) {

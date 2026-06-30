@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit, hashOtp } from "@/lib/utils";
 import { sendOtpSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
-import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { sendEmail } from "@/lib/mailer";
 import { otpTemplate } from "@/lib/email-templates";
 
 function generateCode(): string {
@@ -71,27 +71,12 @@ export async function POST(req: Request) {
       });
     }
 
-    let resendErrorMsg: string | null = null;
     try {
       const { subject, html } = otpTemplate(code);
-      const { error: resendErr } = await getResendClient().emails.send({
-        from: RESEND_FROM_EMAIL,
-        to: email,
-        subject,
-        html,
-      });
-
-      if (resendErr) {
-        resendErrorMsg = resendErr.message;
-        logger.error({ event: "otp.send.resend_error", message: "Resend API rejected email", ip, email, error: resendErr.message });
-      }
+      await sendEmail(email, subject, html);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      resendErrorMsg = msg;
-      logger.error({ event: "otp.send.resend_error", message: "Resend threw an exception", ip, email, error: msg });
-    }
-
-    if (resendErrorMsg) {
+      logger.error({ event: "otp.send.email_error", message: "Failed to send OTP email", ip, email, error: msg });
       return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
     }
 

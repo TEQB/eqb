@@ -7,10 +7,13 @@ const REQUIRED = [
   "RESEND_FROM_EMAIL",
   "NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN",
   "ADMIN_SECRET_PATH",
-  "ADMIN_INITIAL_EMAIL",
 ] as const;
 
-const RECOMMENDED = ["RESEND_FROM_EMAIL"] as const;
+const RECOMMENDED = [
+  "RESEND_FROM_EMAIL",
+  "ADMIN_INITIAL_EMAIL",
+  "BREVO_API_KEY",
+] as const;
 
 export function validateEnv(): string[] {
   const missing: string[] = [];
