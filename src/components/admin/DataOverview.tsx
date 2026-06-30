@@ -3,12 +3,13 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
 import { toast } from "@/components/ui/toaster";
+import { EditModal, EntityType } from "./EditModal";
 
 type Tab = "faculties" | "programmes" | "courses";
 
 type Faculty = { id: string; name: string; slug: string };
-type Programme = { name: string; faculty_name: string };
-type Course = { code: string; title: string; level: number };
+type Programme = { id: string; name: string; faculty_id: string; faculty_name: string };
+type Course = { id: string; code: string; title: string; level: number };
 
 const BulkImportModal = dynamic(
   () => import("./BulkImportModal").then((mod) => mod.BulkImportModal),
@@ -25,6 +26,20 @@ const BulkImportModal = dynamic(
   },
 );
 
+function EditButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+      title="Edit"
+    >
+      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+      </svg>
+    </button>
+  );
+}
+
 export function DataOverview() {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
@@ -36,6 +51,8 @@ export function DataOverview() {
   const [showForm, setShowForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [editType, setEditType] = useState<EntityType | null>(null);
+  const [editEntity, setEditEntity] = useState<Faculty | Programme | Course | null>(null);
 
   const loadData = async () => {
     const [fRes, dRes, cRes] = await Promise.all([
@@ -300,13 +317,14 @@ export function DataOverview() {
             filteredFaculties.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredFaculties.map((f) => (
-                  <div key={f.id} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
+                  <div key={f.id} className="group flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-100 text-primary-700">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                       </svg>
                     </div>
-                    <span className="font-medium">{f.name}</span>
+                    <span className="flex-1 truncate font-medium">{f.name}</span>
+                    <EditButton onClick={() => { setEditType("faculty"); setEditEntity(f); }} />
                   </div>
                 ))}
               </div>
@@ -329,7 +347,7 @@ export function DataOverview() {
             filteredProgrammes.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredProgrammes.map((d) => (
-                  <div key={d.name} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
+                  <div key={d.id} className="group flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m15-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
@@ -339,6 +357,7 @@ export function DataOverview() {
                       <p className="truncate font-medium">{d.name}</p>
                       <p className="truncate text-xs text-gray-400">{d.faculty_name}</p>
                     </div>
+                    <EditButton onClick={() => { setEditType("programme"); setEditEntity(d); }} />
                   </div>
                 ))}
               </div>
@@ -361,7 +380,7 @@ export function DataOverview() {
             filteredCourses.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredCourses.map((c) => (
-                  <div key={c.code} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
+                  <div key={c.id} className="group flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition-colors hover:border-gray-200 hover:bg-white">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -374,6 +393,7 @@ export function DataOverview() {
                       </div>
                       <p className="truncate text-xs text-gray-500">{c.title}</p>
                     </div>
+                    <EditButton onClick={() => { setEditType("course"); setEditEntity(c); }} />
                   </div>
                 ))}
               </div>
@@ -398,6 +418,16 @@ export function DataOverview() {
         isOpen={showBulkImport}
         onClose={() => setShowBulkImport(false)}
         onSuccess={() => { loadData(); }}
+      />
+
+      <EditModal
+        type={editType ?? "faculty"}
+        isOpen={editType !== null}
+        entity={editEntity}
+        faculties={faculties}
+        onClose={() => { setEditType(null); setEditEntity(null); }}
+        onDeleted={() => loadData()}
+        onUpdated={() => loadData()}
       />
     </div>
   );

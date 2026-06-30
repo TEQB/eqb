@@ -217,11 +217,11 @@ export async function GET(req: NextRequest) {
       case "programmes": {
         const { data: list } = await service
           .from("departments")
-          .select("id, name, faculties!inner(name)")
+          .select("id, name, faculty_id, faculties!inner(name)")
           .order("name") as never;
-        const programmes = (list as unknown as { id: string; name: string; faculties: { name: string } }[] | null) ?? [];
+        const programmes = (list as unknown as { id: string; name: string; faculty_id: string; faculties: { name: string } }[] | null) ?? [];
         return NextResponse.json({
-          programmes: programmes.map((d) => ({ id: d.id, name: d.name, faculty_name: d.faculties?.name || "" })),
+          programmes: programmes.map((d) => ({ id: d.id, name: d.name, faculty_id: d.faculty_id, faculty_name: d.faculties?.name || "" })),
         });
       }
 
@@ -685,6 +685,87 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         }
         logger.info({ event: "admin.bulk_import_programmes", message: "Bulk import programmes completed", userId: user.id, metadata: results2 });
         return NextResponse.json({ success: true, results: results2 });
+      }
+
+      case "update-faculty": {
+        const faculty_id = formData.get("id") as string;
+        const name = formData.get("name") as string;
+        if (!faculty_id || !name) {
+          return NextResponse.json({ error: "ID and name required" }, { status: 400 });
+        }
+        const slug = name.toLowerCase().replace(/\s+/g, "-");
+        const { error } = await service.from("faculties").update({ name, slug } as never).eq("id", faculty_id);
+        if (error) throw error;
+        logger.info({ event: "admin.update_faculty", message: "Faculty updated", userId: user.id, metadata: { faculty_id, name } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "update-programme": {
+        const programme_id = formData.get("id") as string;
+        const name = formData.get("name") as string;
+        const faculty_id = formData.get("faculty_id") as string;
+        if (!programme_id || !name) {
+          return NextResponse.json({ error: "ID and name required" }, { status: 400 });
+        }
+        const slug = name.toLowerCase().replace(/\s+/g, "-");
+        const updateData: Record<string, string> = { name, slug };
+        if (faculty_id) updateData.faculty_id = faculty_id;
+        const { error } = await service.from("departments").update(updateData as never).eq("id", programme_id);
+        if (error) throw error;
+        logger.info({ event: "admin.update_programme", message: "Programme updated", userId: user.id, metadata: { programme_id, name } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "update-course": {
+        const course_id = formData.get("id") as string;
+        const code = formData.get("code") as string;
+        const title = formData.get("title") as string;
+        const level = parseInt(formData.get("level") as string);
+        if (!course_id || !code || !title || !level) {
+          return NextResponse.json({ error: "All fields required" }, { status: 400 });
+        }
+        const { error } = await service.from("courses").update({
+          code: code.toUpperCase(),
+          title,
+          level,
+        } as never).eq("id", course_id);
+        if (error) throw error;
+        logger.info({ event: "admin.update_course", message: "Course updated", userId: user.id, metadata: { course_id, code, title } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "delete-faculty": {
+        const faculty_id = formData.get("id") as string;
+        if (!faculty_id) {
+          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        }
+        await service.from("departments").delete().eq("faculty_id", faculty_id);
+        const { error } = await service.from("faculties").delete().eq("id", faculty_id);
+        if (error) throw error;
+        logger.info({ event: "admin.delete_faculty", message: "Faculty deleted", userId: user.id, metadata: { faculty_id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "delete-programme": {
+        const programme_id = formData.get("id") as string;
+        if (!programme_id) {
+          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        }
+        const { error } = await service.from("departments").delete().eq("id", programme_id);
+        if (error) throw error;
+        logger.info({ event: "admin.delete_programme", message: "Programme deleted", userId: user.id, metadata: { programme_id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "delete-course": {
+        const course_id = formData.get("id") as string;
+        if (!course_id) {
+          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        }
+        const { error } = await service.from("courses").delete().eq("id", course_id);
+        if (error) throw error;
+        logger.info({ event: "admin.delete_course", message: "Course deleted", userId: user.id, metadata: { course_id } });
+        return NextResponse.json({ success: true });
       }
 
       default:
