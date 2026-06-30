@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { passwordResetTemplate } from "@/lib/email-templates";
 
 type ResetRole = "student" | "super_admin";
 
@@ -74,30 +76,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not generate reset link" }, { status: 500 });
     }
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "EQB <noreply@devalyze.space>",
+    let resendErrorMsg: string | null = null;
+    try {
+      const { subject, html } = passwordResetTemplate(recoveryLink, role === "super_admin");
+      const { error: resendErr } = await getResendClient().emails.send({
+        from: RESEND_FROM_EMAIL,
         to: email,
-        subject: role === "super_admin" ? "Reset your EQB admin password" : "Reset your EQB password",
-        html: `<h2>Password Reset</h2>
-<p>You requested a password reset for your <strong>EQB</strong> ${role === "super_admin" ? "admin" : "student"} account.</p>
-<p>Click the link below to reset your password:</p>
-<p style="text-align:center;padding:16px">
-  <a href="${recoveryLink}" style="display:inline-block;padding:12px 24px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Reset your password</a>
-</p>
-<p style="color:#666;font-size:13px">This link expires in 24 hours. If you didn't request this, you can safely ignore this email.</p>`,
-      }),
-    });
+        subject,
+        html,
+      });
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      logger.error({ event: "forgot_password.resend_error", message: "Resend API rejected forgot-password email", ip, email, error: errBody, metadata: { role } });
-      return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+      if (resendErr) {
+        resendErrorMsg = resendErr.message;
+        logger.error({ event: "forgot_password.resend_error", message: "Resend API rejected email", ip, email, error: resendErr.message, metadata: { role } });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      resendErrorMsg = msg;
+      logger.error({ event: "forgot_password.resend_error", message: "Resend threw an exception", ip, email, error: msg, metadata: { role } });
+    }
+
+    if (resendErrorMsg) {
+      return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
     }
 
     logger.info({ event: "forgot_password.success", message: "Password reset email sent via Resend", ip, email, durationMs: Date.now() - start, metadata: { role } });

@@ -81,36 +81,19 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     setError("");
     setLoading(true);
 
-    const { error: signInError } =
-      await supabase.auth.signInWithPassword({ email, password });
+    const res = await fetch("/api/auth/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (signInError) {
-      setError(signInError.message);
-      toast.error(signInError.message);
-      setLoading(false);
-      return;
-    }
+    setLoading(false);
 
-    const userId = (await supabase.auth.getUser()).data.user?.id;
-    if (!userId) {
-      setError("Could not verify identity");
-      toast.error("Could not verify identity");
-      setLoading(false);
-      return;
-    }
-
-    const { data: rawProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("auth_user_id", userId)
-      .single();
-    const profile = rawProfile as unknown as { role: string } | null;
-
-    if (profile?.role !== "super_admin") {
-      await supabase.auth.signOut();
-      setError("Not authorized as admin");
-      toast.error("Not authorized as admin");
-      setLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: "Login failed" }));
+      const msg = data?.error || "Login failed";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 

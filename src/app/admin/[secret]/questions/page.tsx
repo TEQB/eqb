@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "@/components/ui/toaster";
+import { SolutionsModal } from "@/components/admin/SolutionsModal";
 
 interface Question {
   id: string;
@@ -14,6 +15,7 @@ interface Question {
   status: string;
   flag_count: number;
   created_at: string;
+  uploader_email: string | null;
   courses: {
     code: string;
     title: string;
@@ -21,7 +23,7 @@ interface Question {
     department_id: string;
     departments: { name: string };
   } | null;
-  profiles: { full_name: string } | null;
+  profiles: { full_name: string; auth_user_id?: string } | null;
 }
 
 interface Programme {
@@ -47,6 +49,7 @@ export default function AdminQuestionsPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [selectedQuestion, setSelectedQuestion] = useState<{ id: string; code: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin?action=programmes")
@@ -210,7 +213,7 @@ export default function AdminQuestionsPage({
               <th className="px-5 py-3 font-medium text-gray-500">Course Name</th>
               <th className="px-5 py-3 font-medium text-gray-500">Programme</th>
               <th className="px-5 py-3 font-medium text-gray-500">Level</th>
-              <th className="px-5 py-3 font-medium text-gray-500">Uploaded By</th>
+              <th className="px-5 py-3 font-medium text-gray-500">Uploader</th>
               <th className="px-5 py-3 font-medium text-gray-500">Upload Date</th>
               <th className="px-5 py-3 font-medium text-gray-500">Status</th>
               <th className="px-5 py-3 font-medium text-gray-500">Actions</th>
@@ -253,8 +256,11 @@ export default function AdminQuestionsPage({
                   <td className="px-5 py-4 text-gray-700">
                     {q.courses?.level || "-"}
                   </td>
-                  <td className="px-5 py-4 text-gray-700">
-                    {q.profiles?.full_name || "Unknown"}
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-gray-900">{q.profiles?.full_name || "Unknown"}</p>
+                    {q.uploader_email && (
+                      <p className="text-xs text-gray-400">{q.uploader_email}</p>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-gray-500">
                     {new Date(q.created_at).toLocaleDateString()}
@@ -265,7 +271,7 @@ export default function AdminQuestionsPage({
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {q.file_url && (
                         <a
                           href={q.file_url}
@@ -276,6 +282,12 @@ export default function AdminQuestionsPage({
                           View
                         </a>
                       )}
+                      <button
+                        onClick={() => setSelectedQuestion({ id: q.id, code: q.courses?.code || q.course_id.slice(0, 8) })}
+                        className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100"
+                      >
+                        Solutions
+                      </button>
                       {q.status === "pending_review" && (
                         <button
                           onClick={() => handleAction(q.id, "approve")}
@@ -330,6 +342,15 @@ export default function AdminQuestionsPage({
           </div>
         </div>
       )}
+
+      <SolutionsModal
+        questionId={selectedQuestion?.id ?? ""}
+        questionCode={selectedQuestion?.code ?? ""}
+        isOpen={selectedQuestion !== null}
+        onClose={() => setSelectedQuestion(null)}
+        onDeleted={() => {}}
+        onSolutionsChanged={fetchQuestions}
+      />
     </div>
   );
 }

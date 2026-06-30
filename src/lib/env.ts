@@ -4,13 +4,25 @@ const REQUIRED = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "GEMINI_API_KEY",
   "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
   "NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN",
   "ADMIN_SECRET_PATH",
+  "ADMIN_INITIAL_EMAIL",
 ] as const;
+
+const RECOMMENDED = ["RESEND_FROM_EMAIL"] as const;
 
 export function validateEnv(): string[] {
   const missing: string[] = [];
   for (const key of REQUIRED) {
+    if (!process.env[key]) missing.push(key);
+  }
+  return missing;
+}
+
+export function validateRecommended(): string[] {
+  const missing: string[] = [];
+  for (const key of RECOMMENDED) {
     if (!process.env[key]) missing.push(key);
   }
   return missing;

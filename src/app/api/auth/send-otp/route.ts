@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit, hashOtp } from "@/lib/utils";
 import { sendOtpSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
+import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { otpTemplate } from "@/lib/email-templates";
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -69,26 +71,28 @@ export async function POST(req: Request) {
       });
     }
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "EQB <noreply@devalyze.space>",
+    let resendErrorMsg: string | null = null;
+    try {
+      const { subject, html } = otpTemplate(code);
+      const { error: resendErr } = await getResendClient().emails.send({
+        from: RESEND_FROM_EMAIL,
         to: email,
-        subject: "Your EQB sign-in code",
-        html: `<h2>Your sign-in code</h2>
-<p>Use the code below to sign in to EQB. It expires in 10 minutes.</p>
-<p style="font-size:24px;font-weight:bold;letter-spacing:8px;text-align:center;padding:16px;background:#f3f4f6;border-radius:8px">${code}</p>`,
-      }),
-    });
+        subject,
+        html,
+      });
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      logger.error({ event: "otp.send.resend_error", message: "Resend API rejected email", ip, email, error: errBody });
-      return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+      if (resendErr) {
+        resendErrorMsg = resendErr.message;
+        logger.error({ event: "otp.send.resend_error", message: "Resend API rejected email", ip, email, error: resendErr.message });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      resendErrorMsg = msg;
+      logger.error({ event: "otp.send.resend_error", message: "Resend threw an exception", ip, email, error: msg });
+    }
+
+    if (resendErrorMsg) {
+      return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
     }
 
     logger.info({ event: "otp.send.success", message: "OTP sent", ip, email, durationMs: Date.now() - start });

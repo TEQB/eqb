@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkRateLimit } from "@/lib/utils";
+import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
@@ -11,6 +11,8 @@ export async function POST(req: Request) {
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "unknown";
+
+  const allowedAdminEmail = process.env.ADMIN_INITIAL_EMAIL;
 
   try {
     const { email, password, fullName } = await req.json();
@@ -33,20 +35,20 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!allowedAdminEmail || email.toLowerCase() !== allowedAdminEmail.toLowerCase()) {
+      logger.warn({ event: "admin.create.wrong_email", message: "Non-initial admin email attempted registration", ip, email });
+      return NextResponse.json(
+        { error: "Only the designated initial admin email can register" },
+        { status: 403 },
+      );
+    }
+
     const rateKey = `create-admin:${ip}`;
-    if (!checkRateLimit(rateKey, 3, 60_000)) {
+    if (!(await checkDbRateLimit(rateKey, 3, 60_000))) {
       logger.warn({ event: "admin.create.rate_limited", message: "Admin creation rate limit hit", ip });
       return NextResponse.json(
         { error: "Too many admin creation attempts. Please wait." },
         { status: 429 },
-      );
-    }
-
-    if (email !== "ifeoluwa.bankole05@gmail.com") {
-      logger.warn({ event: "admin.create.wrong_email", message: "Non-admin email attempted admin registration", ip, email });
-      return NextResponse.json(
-        { error: "Only the designated admin email can register" },
-        { status: 403 },
       );
     }
 
@@ -96,8 +98,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: authUser } = await supabase.auth.admin.listUsers();
-    const adminUser = authUser?.users.find((u) => u.email === email);
+    const result = await supabase.auth.admin.listUsers();
+    const adminUser = result.data?.users?.find((u) => u.email === email);
 
     if (adminUser) {
       const programmeId = (programmeRow as unknown as { id: string }).id;

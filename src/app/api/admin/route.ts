@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
           .select(`
             id, course_id, year, semester, exam_type, file_url, file_type, status, flag_count, created_at,
             courses!inner(code, title, level, department_id),
-            profiles!inner(full_name)
+            profiles!inner(full_name, auth_user_id)
           `, { count: "exact" });
 
         if (status && status !== "all") {
@@ -170,9 +170,35 @@ export async function GET(req: NextRequest) {
           file_url: q.file_url ? `${supabaseUrl}/storage/v1/object/public/approved/${q.file_url}` : null,
         }));
 
+        const authUserIds = Array.from(
+          new Set(
+            (questionsWithUrls as Array<{ profiles?: { auth_user_id: string } }>)
+              .map((q) => q.profiles?.auth_user_id)
+              .filter(Boolean),
+          ),
+        ) as string[];
+        const emailMap = new Map<string, string>();
+        if (authUserIds.length > 0) {
+          const result = await service.auth.admin.listUsers({ perPage: 1000 });
+          if (result.data?.users) {
+            for (const u of result.data.users) {
+              if (u.id && u.email) emailMap.set(u.id, u.email);
+            }
+          }
+        }
+
+        const questionsWithEmail = (questionsWithUrls as Array<Record<string, unknown>>).map((q) => {
+          const profile = q.profiles as Record<string, unknown> | undefined;
+          const authUid = profile?.auth_user_id as string | undefined;
+          return {
+            ...q,
+            uploader_email: authUid ? emailMap.get(authUid) || null : null,
+          };
+        });
+
         const deptIds = Array.from(
           new Set(
-            (questionsWithUrls as Array<{ courses?: { department_id: string } }>)
+            (questionsWithEmail as Array<{ courses?: { department_id: string } }>)
               .map((q) => q.courses?.department_id)
               .filter(Boolean),
           ),
@@ -183,11 +209,11 @@ export async function GET(req: NextRequest) {
           .in("id", deptIds.length > 0 ? deptIds : ["none"]);
         const deptMap = new Map((deptRows ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
 
-        const questionsWithProgramme = (questionsWithUrls as Array<Record<string, unknown>>).map((q) => {
+        const questionsWithProgramme = (questionsWithEmail as never as Array<Record<string, unknown>>).map((q) => {
           const course = q.courses as Record<string, unknown> | undefined;
           return {
             ...q,
-            courses: course ? { ...course, departments: { name: deptMap.get(course.department_id as string) || "" } } : null,
+            courses: course ? { ...course, departments: { name: course.department_id ? deptMap.get(course.department_id as string) || "" : "" } } : null,
           };
         });
 
@@ -251,6 +277,57 @@ export async function GET(req: NextRequest) {
           return { id: profile.id, full_name: profile.full_name, email: emailMap.get(profile.auth_user_id) || "Unknown", created_at: profile.created_at };
         });
         return NextResponse.json({ admins });
+      }
+
+      case "question-solutions": {
+        const questionId = req.nextUrl.searchParams.get("question_id");
+        if (!questionId) {
+          return NextResponse.json({ error: "question_id required" }, { status: 400 });
+        }
+        const { data: rawSolutions } = await service
+          .from("solutions")
+          .select(`
+            id, body, file_url, created_at, upvotes, downvotes,
+            rating_sum, rating_count,
+            submitted_by,
+            profiles!inner(full_name, auth_user_id)
+          `)
+          .eq("question_id", questionId)
+          .order("created_at", { ascending: false });
+
+        const solutions = (rawSolutions ?? []) as unknown as Array<{
+          id: string; body: string | null; file_url: string | null; created_at: string;
+          upvotes: number; downvotes: number; rating_sum: number; rating_count: number;
+          submitted_by: string;
+          profiles: { full_name: string; auth_user_id: string };
+        }>;
+
+        const authUserIds = Array.from(new Set(solutions.map((s) => s.profiles?.auth_user_id).filter(Boolean))) as string[];
+        const authorEmailMap = new Map<string, string>();
+        if (authUserIds.length > 0) {
+          const result = await service.auth.admin.listUsers({ perPage: 1000 });
+          if (result.data?.users) {
+            for (const u of result.data.users) {
+              if (u.id && u.email) authorEmailMap.set(u.id, u.email);
+            }
+          }
+        }
+
+        return NextResponse.json({
+          solutions: solutions.map((s) => ({
+            id: s.id,
+            body: s.body,
+            file_url: s.file_url,
+            created_at: s.created_at,
+            upvotes: s.upvotes,
+            downvotes: s.downvotes,
+            rating_sum: s.rating_sum,
+            rating_count: s.rating_count,
+            submitted_by: s.submitted_by,
+            author_name: s.profiles?.full_name || "Unknown",
+            author_email: authorEmailMap.get(s.profiles?.auth_user_id) || null,
+          })),
+        });
       }
 
       default:
@@ -751,6 +828,20 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         if (!programme_id) {
           return NextResponse.json({ error: "ID required" }, { status: 400 });
         }
+
+        const { data: rawAdminProfile } = await service
+          .from("profiles")
+          .select("department_id, role")
+          .eq("auth_user_id", user.id)
+          .single();
+        const adminProfile = rawAdminProfile as unknown as { department_id: string; role: string } | null;
+        if (adminProfile?.department_id === programme_id) {
+          return NextResponse.json(
+            { error: "Cannot delete the programme your account is attached to" },
+            { status: 409 },
+          );
+        }
+
         const { error } = await service.from("departments").delete().eq("id", programme_id);
         if (error) throw error;
         logger.info({ event: "admin.delete_programme", message: "Programme deleted", userId: user.id, metadata: { programme_id } });
@@ -765,6 +856,26 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const { error } = await service.from("courses").delete().eq("id", course_id);
         if (error) throw error;
         logger.info({ event: "admin.delete_course", message: "Course deleted", userId: user.id, metadata: { course_id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "delete-solution": {
+        const solution_id = formData.get("id") as string;
+        if (!solution_id) {
+          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        }
+        const { data: rawSolution } = await service
+          .from("solutions")
+          .select("file_url")
+          .eq("id", solution_id)
+          .single();
+        const solution = rawSolution as unknown as { file_url: string | null } | null;
+        if (solution?.file_url) {
+          await service.storage.from("solutions").remove([solution.file_url]);
+        }
+        const { error } = await service.from("solutions").delete().eq("id", solution_id);
+        if (error) throw error;
+        logger.info({ event: "admin.delete_solution", message: "Solution deleted", userId: user.id, metadata: { solution_id } });
         return NextResponse.json({ success: true });
       }
 

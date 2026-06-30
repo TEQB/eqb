@@ -1,7 +1,7 @@
 "use client";
 
 export default function ErrorPage({
-  error,
+  error: _error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -15,7 +15,7 @@ export default function ErrorPage({
           Something went wrong
         </h1>
         <p className="mt-2 text-sm text-gray-500">
-          {error.message || "An unexpected error occurred."}
+          An unexpected error occurred. Please try again or contact support if the problem persists.
         </p>
         <button
           type="button"

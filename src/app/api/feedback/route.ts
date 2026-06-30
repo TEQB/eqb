@@ -4,15 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { getAdminRecipientEmails } from "@/lib/admin-recipients";
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;");
-}
+import { getResendClient, RESEND_FROM_EMAIL } from "@/lib/resend";
+import { feedbackTemplate } from "@/lib/email-templates";
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -90,29 +83,34 @@ export async function POST(req: Request) {
     const adminEmails = await getAdminRecipientEmails(service);
     if (adminEmails.length > 0) {
       const [to, ...bcc] = adminEmails;
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "EQB <noreply@devalyze.space>",
+      const { subject, html } = feedbackTemplate(
+        profile.full_name,
+        profile.department?.name || "Unknown",
+        message,
+      );
+
+      let emailFailed = false;
+      try {
+        const { error: emailErr } = await getResendClient().emails.send({
+          from: RESEND_FROM_EMAIL,
           to,
           bcc,
-          subject: "New EQB student feedback",
-          html: `<h2>New feedback received</h2>
-<p><strong>Student:</strong> ${escapeHtml(profile.full_name)}</p>
-<p><strong>Programme:</strong> ${escapeHtml(profile.department?.name || "Unknown")}</p>
-<p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
-<hr />
-<p style="white-space:pre-wrap">${escapeHtml(message)}</p>`,
-        }),
-      });
+          subject,
+          html,
+        });
 
-      if (!res.ok) {
-        const errBody = await res.text();
-        logger.error({ event: "feedback.email_failed", message: "Resend rejected feedback email", userId: user.id, error: errBody });
+        if (emailErr) {
+          emailFailed = true;
+          logger.error({ event: "feedback.email_failed", message: "Resend rejected feedback email", userId: user.id, error: emailErr.message });
+        }
+      } catch (err) {
+        emailFailed = true;
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ event: "feedback.email_failed", message: "Resend threw an exception", userId: user.id, error: msg });
+      }
+
+      if (emailFailed) {
+        return NextResponse.json({ error: "Feedback saved but admin notification failed" }, { status: 500 });
       }
     } else {
       logger.warn({ event: "feedback.no_admin_recipients", message: "No admin recipients available for feedback email", userId: user.id });
