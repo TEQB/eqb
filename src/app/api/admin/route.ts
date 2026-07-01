@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
 import { queryLogs, getLogStats } from "@/lib/db-logger";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -969,6 +970,414 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         if (error) throw error;
         logger.info({ event: "admin.delete_solution", message: "Solution deleted", userId: user.id, metadata: { solution_id } });
         return NextResponse.json({ success: true });
+      }
+
+      case "bulk-extract": {
+        const files = formData.getAll("files");
+        if (!files.length) {
+          return NextResponse.json({ error: "No files provided" }, { status: 400 });
+        }
+        const batchId = crypto.randomUUID();
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+        const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+        const model = genAI.getGenerativeModel({ model: geminiModel });
+
+        const extractionPrompt = `You are analyzing a page from a university past question paper.
+Analyze the attached file and return ONLY valid JSON with no markdown, no fences, no explanation.
+Return this exact shape:
+{
+  "courseCode": string | null,
+  "courseTitle": string | null,
+  "level": number | null,
+  "semester": "first" | "second" | null,
+  "session": string | null,
+  "examType": "examination" | "mid_semester" | null,
+  "pageIndicator": string | null,
+  "textSnippet": string,
+  "isReadable": boolean,
+  "isExamDocument": boolean
+}
+
+Rules:
+- courseCode: normalized course code visible on document (e.g. "CSC 301"), null if not visible
+- courseTitle: exact text as printed on document for course name/title, null if not visible
+- level: inferred from course code digit (e.g. "CSC 301" → 300) or null if cannot determine
+- semester: only "first" or "second" if explicitly printed on the page (e.g. "FIRST SEMESTER")
+- session: e.g. "2025/2026" if visible, else null
+- examType: "examination" or "mid_semester" based on document header
+- pageIndicator: e.g. "Page 2 of 3" or "continued" or null
+- textSnippet: first ~100 characters of visible body text, for grouping/display
+- isReadable: true if students can reasonably read and study from this
+- isExamDocument: true if this is clearly a university exam/test paper
+Return JSON only.`;
+
+        const stagedPaths: string[] = [];
+        const extractedResults: Array<{
+          stagedPath: string;
+          originalIndex: number;
+          courseCode: string | null;
+          courseTitle: string | null;
+          level: number | null;
+          semester: "first" | "second" | null;
+          session: string | null;
+          examType: "examination" | "mid_semester" | null;
+          pageIndicator: string | null;
+          textSnippet: string;
+          isReadable: boolean;
+          isExamDocument: boolean;
+        }> = [];
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i] as File;
+          const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+          const mimeType = ext === "pdf" ? "application/pdf" : ext === "png" ? "image/png" : "image/jpeg";
+          const stagedPath = `bulk-staging/${batchId}/${i}.${ext}`;
+
+          const { error: uploadError } = await service.storage
+            .from("pending")
+            .upload(stagedPath, file, { contentType: mimeType });
+          if (uploadError) {
+            logger.error({ event: "bulk_extract.upload_failed", message: "Failed to stage file", userId: user.id, metadata: { index: i, error: uploadError.message } });
+            return NextResponse.json({ error: `Failed to stage file ${i}: ${uploadError.message}` }, { status: 500 });
+          }
+          stagedPaths.push(stagedPath);
+
+          const { data: fileData } = await service.storage
+            .from("pending")
+            .download(stagedPath);
+          if (!fileData) {
+            logger.error({ event: "bulk_extract.download_failed", message: "Failed to read staged file", userId: user.id, metadata: { stagedPath } });
+            return NextResponse.json({ error: "Failed to read staged file" }, { status: 500 });
+          }
+
+          const bytes = new Uint8Array(await fileData.arrayBuffer());
+          const binary = Array.from(bytes).map((b) => String.fromCharCode(b)).join("");
+          const fileBase64 = btoa(binary);
+
+          try {
+            const result = await model.generateContent([
+              { inlineData: { mimeType, data: fileBase64 } },
+              extractionPrompt,
+            ]);
+            const raw = result.response.text().trim().replace(/```json|```/g, "").trim();
+            const parsed = JSON.parse(raw);
+            extractedResults.push({
+              stagedPath,
+              originalIndex: i,
+              courseCode: parsed.courseCode || null,
+              courseTitle: parsed.courseTitle || null,
+              level: parsed.level || null,
+              semester: parsed.semester || null,
+              session: parsed.session || null,
+              examType: parsed.examType || "examination",
+              pageIndicator: parsed.pageIndicator || null,
+              textSnippet: parsed.textSnippet || "",
+              isReadable: parsed.isReadable ?? true,
+              isExamDocument: parsed.isExamDocument ?? true,
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error({ event: "bulk_extract.gemini_failed", message: "Gemini extraction failed for file", userId: user.id, metadata: { index: i, error: msg } });
+            extractedResults.push({
+              stagedPath,
+              originalIndex: i,
+              courseCode: null,
+              courseTitle: null,
+              level: null,
+              semester: null,
+              session: null,
+              examType: "examination",
+              pageIndicator: null,
+              textSnippet: "",
+              isReadable: false,
+              isExamDocument: false,
+            });
+          }
+        }
+
+        const normalizeCourseCode = (code: string | null): string => {
+          if (!code) return "";
+          return code.toUpperCase().replace(/\s+/g, " ").trim().replace(/[^A-Z0-9 ]/g, "");
+        };
+
+        type ExtractedGroup = {
+          pages: { stagedPath: string; originalIndex: number; textSnippet: string; pageIndicator: string | null }[];
+          proposedMetadata: {
+            courseCode: string | null;
+            courseTitle: string | null;
+            level: number | null;
+            semester: "first" | "second" | null;
+            session: string | null;
+            examType: "examination" | "mid_semester";
+          };
+          groupConfidence: "high" | "low";
+          normalizedCode: string;
+        };
+
+        const groups: ExtractedGroup[] = [];
+        let currentGroup: ExtractedGroup | null = null;
+        const MAX_PAGES_PER_GROUP = 6;
+
+        for (let i = 0; i < extractedResults.length; i++) {
+          const result = extractedResults[i];
+          const normalizedCode = normalizeCourseCode(result.courseCode);
+          const prevResult = i > 0 ? extractedResults[i - 1] : null;
+          const prevNormalizedCode = prevResult ? normalizeCourseCode(prevResult.courseCode) : "";
+
+          const prevPageIndicator = prevResult?.pageIndicator || "";
+          const hasPageContinuity =
+            prevPageIndicator !== "" &&
+            (prevPageIndicator.toLowerCase().includes("page") ||
+              prevPageIndicator.toLowerCase().includes("continued") ||
+              prevPageIndicator.toLowerCase().includes("cont'd"));
+
+          const codeChanged = normalizedCode !== prevNormalizedCode;
+          const pageBreak = codeChanged && !hasPageContinuity;
+
+          if (!currentGroup || pageBreak || currentGroup.pages.length >= MAX_PAGES_PER_GROUP) {
+            if (currentGroup && currentGroup.pages.length > 0) {
+              groups.push(currentGroup);
+            }
+            currentGroup = {
+              pages: [],
+              proposedMetadata: {
+                courseCode: result.courseCode,
+                courseTitle: result.courseTitle,
+                level: result.level,
+                semester: result.semester,
+                session: result.session,
+                examType: result.examType || "examination",
+              },
+              groupConfidence: codeChanged && hasPageContinuity ? "low" : "high",
+              normalizedCode,
+            };
+          } else {
+            if (normalizedCode !== currentGroup.normalizedCode) {
+              currentGroup.groupConfidence = "low";
+            }
+          }
+
+          if (currentGroup) {
+            currentGroup.pages.push({
+              stagedPath: result.stagedPath,
+              originalIndex: result.originalIndex,
+              textSnippet: result.textSnippet,
+              pageIndicator: result.pageIndicator,
+            });
+          }
+        }
+        if (currentGroup && currentGroup.pages.length > 0) {
+          groups.push(currentGroup);
+        }
+
+        for (const group of groups) {
+          const normalizedCode = group.normalizedCode;
+          if (!normalizedCode) {
+            group.proposedMetadata.courseCode = null;
+            continue;
+          }
+          const { data: exactMatch } = await service
+            .from("courses")
+            .select("id, code, title, level, scope")
+            .ilike("code", normalizedCode)
+            .maybeSingle();
+          if (exactMatch) {
+            (group as Record<string, unknown>).matchedCourseId = (exactMatch as { id: string }).id;
+            (group as Record<string, unknown>).possibleMatches = [];
+          } else {
+            (group as Record<string, unknown>).matchedCourseId = null;
+            const { data: fuzzyMatches } = await service
+              .from("courses")
+              .select("id, code, title")
+              .ilike("code", `%${normalizedCode}%`)
+              .limit(5);
+            (group as Record<string, unknown>).possibleMatches = fuzzyMatches ?? [];
+          }
+        }
+
+        logger.info({ event: "bulk_extract.success", message: "Bulk extraction completed", userId: user.id, metadata: { batchId, fileCount: files.length, groupCount: groups.length }, durationMs: Date.now() - start });
+        return NextResponse.json({ batchId, groups }, { status: 200 });
+      }
+
+      case "bulk-commit": {
+        const body = await req.json();
+        const { batchId, groups: commitGroups } = body as {
+          batchId: string;
+          groups: Array<{
+            pages: Array<{ stagedPath: string; fileType: string }>;
+            courseId: string | null;
+            newCourse: { code: string; title: string; level: number; scope: string; departmentIds: string[] } | null;
+            year: number;
+            semester: string;
+            examType: string;
+          }>;
+        };
+        if (!batchId || !commitGroups?.length) {
+          return NextResponse.json({ error: "batchId and groups required" }, { status: 400 });
+        }
+
+        const { data: rawProfile } = await service
+          .from("profiles")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .single();
+        const profileId = (rawProfile as unknown as { id: string } | null)?.id;
+        if (!profileId) {
+          return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+        }
+
+        const committed: string[] = [];
+        const failed: { groupIndex: number; error: string }[] = [];
+
+        for (let i = 0; i < commitGroups.length; i++) {
+          const group = commitGroups[i];
+          let courseId = group.courseId;
+
+          try {
+            if (!courseId && group.newCourse) {
+              const { code, title, level, scope, departmentIds } = group.newCourse;
+              const { data: existing } = await service
+                .from("courses")
+                .select("id")
+                .ilike("code", code)
+                .maybeSingle();
+              if (existing) {
+                courseId = (existing as { id: string }).id;
+              } else {
+                const insertData: Record<string, unknown> = {
+                  code: code.toUpperCase(),
+                  title,
+                  level,
+                  scope,
+                };
+                if (scope === "departmental" && departmentIds.length > 0) {
+                  insertData.department_id = departmentIds[0];
+                }
+                const { data: newCourseData, error: courseErr } = await service
+                  .from("courses")
+                  .insert(insertData as never)
+                  .select("id")
+                  .single();
+                if (courseErr || !newCourseData) {
+                  failed.push({ groupIndex: i, error: `Course creation failed: ${courseErr?.message || "Unknown error"}` });
+                  const stagedFilesInGroup = group.pages.map((p) => p.stagedPath);
+                  await service.storage.from("pending").remove(stagedFilesInGroup);
+                  continue;
+                }
+                courseId = (newCourseData as unknown as { id: string }).id;
+
+                if ((scope === "shared" || scope === "general") && departmentIds.length > 0) {
+                  const links = departmentIds.map((did) => ({
+                    department_id: did,
+                    course_id: courseId!,
+                  }));
+                  await service.from("department_courses").insert(links as never);
+                }
+              }
+            }
+
+            if (!courseId) {
+              failed.push({ groupIndex: i, error: "No courseId and no newCourse provided" });
+              continue;
+            }
+
+            const questionId = crypto.randomUUID();
+            const year = group.year;
+            const pageInserts: Array<{ question_id: string; page_number: number; file_url: string; file_type: string }> = [];
+            const movedPaths: string[] = [];
+
+            for (let p = 0; p < group.pages.length; p++) {
+              const page = group.pages[p];
+              const ext = page.fileType === "pdf" ? "pdf" : "jpg";
+              const newPath = `approved/${questionId}/page-${p + 1}.${ext}`;
+
+              try {
+                const { data: fileData } = await service.storage
+                  .from("pending")
+                  .download(page.stagedPath);
+                if (fileData) {
+                  const { error: moveErr } = await service.storage
+                    .from("approved")
+                    .upload(newPath, fileData, { contentType: page.fileType === "pdf" ? "application/pdf" : "image/jpeg" });
+                  if (!moveErr) {
+                    movedPaths.push(page.stagedPath);
+                    pageInserts.push({
+                      question_id: questionId,
+                      page_number: p + 1,
+                      file_url: newPath,
+                      file_type: page.fileType,
+                    });
+                  }
+                }
+              } catch (moveErr) {
+                const msg = moveErr instanceof Error ? moveErr.message : String(moveErr);
+                logger.error({ event: "bulk_commit.page_move_failed", message: "Failed to move page", userId: user.id, metadata: { stagedPath: page.stagedPath, error: msg } });
+              }
+            }
+
+            if (pageInserts.length === 0) {
+              failed.push({ groupIndex: i, error: "No pages could be moved" });
+              continue;
+            }
+
+            const { data: courseData } = await service
+              .from("courses")
+              .select("department_id, scope")
+              .eq("id", courseId)
+              .single();
+            const course = courseData as unknown as { department_id: string | null; scope: string } | null;
+
+            const { error: insertErr } = await service.from("past_questions").insert({
+              id: questionId,
+              course_id: courseId,
+              uploaded_by: profileId,
+              level: group.newCourse?.level || 100,
+              file_url: pageInserts[0].file_url,
+              file_type: pageInserts[0].file_type,
+              year,
+              semester: group.semester,
+              exam_type: group.examType || "examination",
+              status: "published",
+              scope: group.newCourse?.scope || course?.scope || "departmental",
+              department_id: group.newCourse?.scope === "departmental" ? (group.newCourse.departmentIds?.[0] || null) : null,
+            } as never);
+            if (insertErr) {
+              failed.push({ groupIndex: i, error: `Failed to insert question: ${insertErr.message}` });
+              await service.storage.from("approved").remove(pageInserts.map((p) => p.file_url));
+              continue;
+            }
+
+            const { error: pagesErr } = await service.from("past_question_pages").insert(pageInserts as never);
+            if (pagesErr) {
+              failed.push({ groupIndex: i, error: `Failed to insert pages: ${pagesErr.message}` });
+              await service.storage.from("approved").remove(pageInserts.map((p) => p.file_url));
+              continue;
+            }
+
+            if (movedPaths.length > 0) {
+              await service.storage.from("pending").remove(movedPaths);
+            }
+            committed.push(questionId);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error({ event: "bulk_commit.group_failed", message: "Group commit failed", userId: user.id, metadata: { groupIndex: i, error: msg } });
+            failed.push({ groupIndex: i, error: msg });
+            const stagedFilesInGroup = group.pages.map((p) => p.stagedPath);
+            await service.storage.from("pending").remove(stagedFilesInGroup);
+          }
+        }
+
+        const { data: remainingFiles } = await service.storage
+          .from("pending")
+          .list(`bulk-staging/${batchId}`, { limit: 100 });
+        if (remainingFiles && remainingFiles.length > 0) {
+          const toDelete = remainingFiles.map((f) => `bulk-staging/${batchId}/${f.name}`);
+          await service.storage.from("pending").remove(toDelete);
+        }
+
+        logger.info({ event: "bulk_commit.done", message: "Bulk commit completed", userId: user.id, metadata: { batchId, committed: committed.length, failed: failed.length }, durationMs: Date.now() - start });
+        return NextResponse.json({ committed: committed.length, failed });
       }
 
       default:
