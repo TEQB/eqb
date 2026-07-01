@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateFile, checkDbRateLimit } from "@/lib/utils";
 import { moderateSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
+import { moderateWithFailover } from "@/lib/moderation-providers";
 
 const RATE_LIMIT = 3;
 const RATE_WINDOW_MS = 60_000;
@@ -122,16 +122,6 @@ export async function POST(req: Request) {
     }
 
     const bytes = new Uint8Array(await fileData.arrayBuffer());
-    const binary = Array.from(bytes).map((b) => String.fromCharCode(b)).join("");
-    const fileBase64 = btoa(binary);
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const geminiModel = process.env.GEMINI_MODEL;
-    if (!geminiModel) {
-      logger.error({ event: "moderate.missing_model", message: "GEMINI_MODEL env var not set" });
-      return NextResponse.json({ error: "AI model not configured" }, { status: 500 });
-    }
-    const model = genAI.getGenerativeModel({ model: geminiModel });
 
     const prompt = `You are reviewing a university past question upload for a student platform.
 Analyze the attached file carefully and return ONLY a valid JSON object — no preamble, no markdown, no explanation:
@@ -152,47 +142,44 @@ Evaluate all five criteria. Fail if ANY single criterion is not met:
 Keep the reason field under 20 words. If pass is true, reason can be empty string.
 Return JSON only.`;
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType:
-            question.file_type === "pdf" ? "application/pdf" : "image/jpeg",
-          data: fileBase64,
-        },
-      },
-      prompt,
-    ]);
-
-    const raw = result.response.text().trim();
-    let verdict: { pass: boolean; reason: string };
-
+    let moderationResult: { verdict: { pass: boolean; reason: string }; providerUsed: string; attempts: import("@/lib/moderation-providers").ProviderAttemptResult[] };
     try {
-      verdict = JSON.parse(raw.replace(/```json|```/g, "").trim());
-    } catch {
+      moderationResult = await moderateWithFailover({
+        imageBytes: Buffer.from(bytes),
+        originalMimeType: question.file_type === "pdf" ? "application/pdf" : "image/jpeg",
+        prompt,
+      });
+    } catch (err) {
+      logger.error({ event: "moderate.all_providers_failed", message: "All moderation providers failed", userId: user.id, metadata: { questionId, error: (err as Error).message } });
       const { data: allPages } = await service
         .from("past_question_pages")
         .select("file_url")
         .eq("question_id", questionId);
-
       if (allPages) {
         const allPaths = allPages.map((p: { file_url: string }) => p.file_url);
         await service.storage.from("pending").remove(allPaths);
       }
-
       await service
         .from("past_questions")
-        .update({
-          status: "rejected",
-          ai_rejection_reason: "Review could not be completed — please re-upload",
-        } as never)
+        .update({ status: "rejected", ai_rejection_reason: "Review could not be completed — please re-upload" } as never)
         .eq("id", questionId);
-
-      logger.error({ event: "moderate.gemini_parse_failed", message: "Failed to parse Gemini response", userId: user.id, metadata: { questionId, raw } });
       return NextResponse.json(
         { pass: false, reason: "Review could not be completed — please re-upload" },
         { status: 200 },
       );
     }
+
+    const verdict = moderationResult.verdict;
+    logger.info({
+      event: "moderate.provider_used",
+      message: "Moderation completed",
+      userId: user.id,
+      metadata: {
+        questionId,
+        providerUsed: moderationResult.providerUsed,
+        attemptCount: moderationResult.attempts.length,
+      },
+    });
 
     if (verdict.pass) {
       const { data: allPages } = await service
