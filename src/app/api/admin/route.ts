@@ -463,7 +463,7 @@ export async function POST(req: NextRequest) {
       case "seed-course": {
         const code = formData.get("code") as string;
         const title = formData.get("title") as string;
-        const department_id = formData.get("department_id") as string;
+        const programme_id = formData.get("programme_id") as string;
         const level = parseInt(formData.get("level") as string);
         const scope = (formData.get("scope") as string) || "departmental";
         const link_dept_ids = formData.getAll("link_dept_ids") as string[];
@@ -474,7 +474,7 @@ export async function POST(req: NextRequest) {
           );
         }
         const insertData: Record<string, unknown> = { code, title, level, scope };
-        if (department_id) insertData.department_id = department_id;
+        if (programme_id) insertData.department_id = programme_id;
         const { data: newCourse, error } = await service
           .from("courses")
           .insert(insertData as never)
@@ -716,7 +716,11 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const level = parseInt(formData.get("level") as string);
         const file_url = formData.get("file_url") as string;
         const file_type = formData.get("file_type") as string;
-        if (!course_id || !year || !semester || !file_url || !file_type) {
+        const question_id = formData.get("question_id") as string;
+        const scope = formData.get("scope") as string || "departmental";
+        const department_id = formData.get("department_id") as string || null;
+        const faculty_id = formData.get("faculty_id") as string || null;
+        if (!course_id || !year || !semester || !file_url || !file_type || !question_id) {
           return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
         const { data: rawProfile } = await service
@@ -728,7 +732,14 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         if (!profileId) {
           return NextResponse.json({ error: "Profile not found" }, { status: 404 });
         }
+
+        let scopeDeptId: string | null = null;
+        if (scope === "departmental" && department_id) {
+          scopeDeptId = department_id;
+        }
+
         const { error: insertErr } = await service.from("past_questions").insert({
+          id: question_id,
           course_id,
           uploaded_by: profileId,
           level,
@@ -738,12 +749,35 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           semester,
           exam_type: exam_type || "examination",
           status: "published",
+          scope,
+          department_id: scopeDeptId,
         } as never);
         if (insertErr) {
           logger.error({ event: "admin.upload_insert_failed", message: "Failed to insert question", userId: user.id, metadata: { error: insertErr.message } });
           return NextResponse.json({ error: insertErr.message }, { status: 500 });
         }
-        logger.info({ event: "admin.upload", message: "Admin uploaded question", userId: user.id, metadata: { course_id, file_url } });
+        logger.info({ event: "admin.upload", message: "Admin uploaded question", userId: user.id, metadata: { course_id, file_url, question_id } });
+        return NextResponse.json({ success: true, questionId: question_id });
+      }
+
+      case "insert-pages": {
+        const pages = (jsonBody?.pages as Array<{
+          question_id: string;
+          page_number: number;
+          file_url: string;
+          file_type: string;
+        }>) || [];
+        if (pages.length === 0) {
+          return NextResponse.json({ error: "No pages provided" }, { status: 400 });
+        }
+        const { error: insertErr } = await service
+          .from("past_question_pages")
+          .insert(pages as never);
+        if (insertErr) {
+          logger.error({ event: "admin.insert_pages_failed", message: "Failed to insert pages", userId: user.id, metadata: { error: insertErr.message, count: pages.length } });
+          return NextResponse.json({ error: insertErr.message }, { status: 500 });
+        }
+        logger.info({ event: "admin.insert_pages", message: "Pages inserted", userId: user.id, metadata: { count: pages.length } });
         return NextResponse.json({ success: true });
       }
 

@@ -34,7 +34,7 @@ export function SeedForm({
     const formData = new FormData(e.currentTarget);
     if (isGeneral) {
       formData.set("scope", "general");
-      formData.delete("department_id");
+      formData.delete("programme_id");
     }
     const res = await fetch(`/api/admin?action=seed-${type}`, {
       method: "POST",
@@ -83,7 +83,7 @@ export function SeedForm({
             <>
               <div>
                 <label className="block text-xs font-medium text-gray-700">Programme</label>
-                <select name="department_id" value={deptId} onChange={(e) => setDeptId(e.target.value)} required
+                <select name="programme_id" value={deptId} onChange={(e) => setDeptId(e.target.value)} required
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
                   <option value="">Select programme</option>
                   {allProgrammes.map((d) => (

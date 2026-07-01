@@ -5,7 +5,7 @@ export const registerSchema = z.object({
   email: z.string().email(),
   matricNumber: z.string().min(6).max(20),
   facultyId: z.string().uuid(),
-  departmentId: z.string().uuid(),
+  programmeId: z.string().uuid(),
   currentLevel: z.preprocess(
     (v) => (v ? Number(v) : v),
     z.number().int().min(100).max(600),
@@ -49,7 +49,7 @@ export const sendOtpSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2).max(100).optional(),
   matricNumber: z.string().min(6).max(20).optional(),
-  departmentId: z.string().uuid().optional(),
+  programmeId: z.string().uuid().optional(),
   currentLevel: z.preprocess(
     (v) => (v ? Number(v) : v),
     z.number().int().min(100).max(600).optional(),

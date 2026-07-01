@@ -45,7 +45,7 @@ export function RegisterForm() {
   });
 
   const selectedFaculty = watch("facultyId");
-  const selectedProgramme = watch("departmentId");
+  const selectedProgramme = watch("programmeId");
 
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -63,7 +63,7 @@ export function RegisterForm() {
     if (!selectedFaculty) {
       setProgrammes([]);
       setLevels([]);
-      setValue("departmentId", "" as never);
+      setValue("programmeId", "" as never);
       setValue("currentLevel", "" as never);
       return;
     }
@@ -75,7 +75,7 @@ export function RegisterForm() {
       .then((data) => {
         setProgrammes(data);
         setLevels([]);
-        setValue("departmentId", "" as never);
+        setValue("programmeId", "" as never);
         setValue("currentLevel", "" as never);
       });
   }, [selectedFaculty, setValue]);
@@ -103,7 +103,7 @@ export function RegisterForm() {
         email: data.email,
         fullName: data.fullName,
         matricNumber: data.matricNumber,
-        departmentId: data.departmentId,
+        programmeId: data.programmeId,
         currentLevel: data.currentLevel,
       }),
     });
@@ -210,12 +210,12 @@ export function RegisterForm() {
           </div>
 
           <div className="w-full">
-            <label htmlFor="departmentId" className="mb-2 block text-sm font-semibold text-gray-700">
+            <label htmlFor="programmeId" className="mb-2 block text-sm font-semibold text-gray-700">
               Programme
             </label>
             <Controller
               control={control}
-              name="departmentId"
+              name="programmeId"
               render={({ field }) => (
                 <Select
                   value={field.value ?? ""}
@@ -240,8 +240,8 @@ export function RegisterForm() {
                 </Select>
               )}
             />
-            {errors.departmentId && (
-              <p className="mt-1 text-xs text-danger-600 animate-fade-in">{errors.departmentId.message}</p>
+            {errors.programmeId && (
+              <p className="mt-1 text-xs text-danger-600 animate-fade-in">{errors.programmeId.message}</p>
             )}
           </div>
 

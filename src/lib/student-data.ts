@@ -5,7 +5,7 @@ type Client = SupabaseClient<Database>;
 
 export type StudentCourseScope = "departmental" | "shared" | "general";
 
-export interface StudentDepartment {
+export interface StudentProgramme {
   id: string;
   name: string;
   available_levels: number[];
@@ -16,13 +16,13 @@ export interface StudentProfile {
   auth_user_id: string;
   full_name: string;
   matric_number: string;
-  department_id: string;
+  programme_id: string;
   current_level: number;
   role: string;
   last_upload_at: string | null;
   is_locked: boolean;
   created_at: string;
-  department: StudentDepartment | null;
+  programme: StudentProgramme | null;
 }
 
 export interface StudentCourse {
@@ -46,7 +46,7 @@ export async function loadStudentProfile(
 ): Promise<StudentProfile | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("*, department:department_id(id, name, available_levels)")
+    .select("*, programme:department_id(id, name, available_levels)")
     .eq("auth_user_id", userId)
     .single();
 

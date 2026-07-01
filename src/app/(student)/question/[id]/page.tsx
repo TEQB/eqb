@@ -9,6 +9,7 @@ import { SolutionForm } from "@/components/solutions/SolutionForm";
 import { FlagModal } from "@/components/question/FlagModal";
 import { Badge } from "@/components/ui/badge";
 import { formatSession } from "@/lib/utils";
+import { ImageViewer } from "@/components/question/ImageViewer";
 import {
   Dialog,
   DialogContent,
@@ -227,10 +228,9 @@ export default function QuestionPage({
                 title={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
               />
             ) : (
-              <img
+              <ImageViewer
                 src={`/api/storage/${page.file_url}`}
                 alt={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
-                className="max-w-full h-auto"
               />
             )}
           </div>

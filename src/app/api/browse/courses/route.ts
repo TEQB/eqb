@@ -11,16 +11,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const departmentId = req.nextUrl.searchParams.get("department_id");
-  if (!departmentId) {
-    return NextResponse.json({ error: "department_id is required" }, { status: 400 });
+  const programmeId = req.nextUrl.searchParams.get("programme_id") || req.nextUrl.searchParams.get("department_id");
+  if (!programmeId) {
+    return NextResponse.json({ error: "programme_id is required" }, { status: 400 });
   }
 
   const service = createServiceClient();
   const { data } = await service
     .from("courses")
     .select("id, code, title, level")
-    .eq("department_id", departmentId)
+    .eq("department_id", programmeId)
     .order("level")
     .order("code");
 

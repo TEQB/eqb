@@ -76,7 +76,7 @@ function CourseSelector({
     setLoading(true);
     setCourses([]);
     onCourseChange("");
-    fetch(`/api/browse/courses?department_id=${selectedProgramme}`)
+    fetch(`/api/browse/courses?programme_id=${selectedProgramme}`)
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setCourses(d.courses ?? []); })
       .catch(() => { if (!cancelled) setCourses([]); })
