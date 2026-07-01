@@ -15,6 +15,10 @@ export function formatDate(date: string | Date): string {
   }).format(new Date(date));
 }
 
+export function formatSession(startYear: number): string {
+  return `${startYear}/${startYear + 1}`;
+}
+
 export function daysRemaining(lastUploadAt: string | null, obligationDays: number): number {
   if (!lastUploadAt) return 0;
   const deadline = new Date(lastUploadAt);

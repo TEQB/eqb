@@ -1,5 +1,6 @@
 import { QuestionRow } from "./QuestionRow";
 import { Reveal } from "@/components/ui/Reveal";
+import { formatSession } from "@/lib/utils";
 
 interface Question {
   id: string;
@@ -39,7 +40,7 @@ export function QuestionList({ questions, emptyMessage }: QuestionListProps) {
         .sort(([a], [b]) => Number(b) - Number(a))
         .map(([year, yearQuestions]) => (
           <Reveal key={year} animation="fade-in-up" threshold={0.05}>
-            <h3 className="mb-2 text-sm font-medium text-gray-500">{year}</h3>
+            <h3 className="mb-2 text-sm font-medium text-gray-500">{formatSession(Number(year))}</h3>
             <div className="space-y-2">
               {yearQuestions.map((q, idx) => (
                 <div

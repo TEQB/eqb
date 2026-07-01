@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/toaster";
+import { formatSession } from "@/lib/utils";
 
 interface QueuedQuestion {
   id: string;
@@ -98,7 +99,7 @@ export function SuspendedQueue({ secret: _secret }: { secret: string }) {
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-gray-400">
-                {q.year} &middot; {q.semester === "first" ? "First" : "Second"} Semester &middot; {q.exam_type === "mid_semester" ? "Mid Semester" : "Examination"} &middot; {q.file_type?.toUpperCase()} &middot; {new Date(q.created_at).toLocaleDateString()}
+                {formatSession(q.year)} &middot; {q.semester === "first" ? "First" : "Second"} Semester &middot; {q.exam_type === "mid_semester" ? "Mid Semester" : "Examination"} &middot; {q.file_type?.toUpperCase()} &middot; {new Date(q.created_at).toLocaleDateString()}
               </p>
             </div>
             <div className="flex shrink-0 gap-2">

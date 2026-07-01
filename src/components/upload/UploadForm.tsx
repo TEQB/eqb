@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { uploadSchema } from "@/lib/validations";
 import { FileDropzone } from "./FileDropzone";
 import { toast } from "@/components/ui/toaster";
+import { formatSession } from "@/lib/utils";
 
 type UploadData = z.infer<typeof uploadSchema>;
 
@@ -390,14 +391,22 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="year" className="block text-sm font-medium text-gray-700">
-              Year
+              Session
             </label>
-            <input
+            <select
               id="year"
-              type="number"
               {...register("year")}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-            />
+            >
+              {Array.from(
+                { length: 10 },
+                (_, i) => new Date().getFullYear() - i,
+              ).map((y) => (
+                <option key={y} value={y}>
+                  {formatSession(y)}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="semester" className="block text-sm font-medium text-gray-700">

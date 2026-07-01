@@ -4,6 +4,7 @@ import {
   loadStudentProfile,
   loadUploadObligationDays,
 } from "@/lib/student-data";
+import { formatSession } from "@/lib/utils";
 
 export default async function ProfilePage() {
   const supabase = createClient();
@@ -102,7 +103,7 @@ export default async function ProfilePage() {
                   style={{ animationDelay: `${idx * 60}ms` }}
                 >
                   <p className="text-sm text-gray-900">
-                    {course?.code || "Unknown"} — {u.year}{" "}
+                    {course?.code || "Unknown"} — {formatSession(u.year)}{" "}
                     {u.semester === "first" ? "1st" : "2nd"} Sem
                   </p>
                   <span

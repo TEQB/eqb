@@ -8,6 +8,7 @@ import { SolutionList } from "@/components/solutions/SolutionList";
 import { SolutionForm } from "@/components/solutions/SolutionForm";
 import { FlagModal } from "@/components/question/FlagModal";
 import { Badge } from "@/components/ui/badge";
+import { formatSession } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -223,12 +224,12 @@ export default function QuestionPage({
               <iframe
                 src={`/api/storage/${page.file_url}`}
                 className="w-full min-h-[600px] rounded-2xl border-0"
-                title={`Past question ${question.year} — page ${page.page_number}`}
+                title={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
               />
             ) : (
               <img
                 src={`/api/storage/${page.file_url}`}
-                alt={`Past question ${question.year} — page ${page.page_number}`}
+                alt={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
                 className="max-w-full h-auto"
               />
             )}

@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     const { data: rawQuestion } = await service
       .from("past_questions")
-      .select("file_url, file_type, uploaded_by, status")
+      .select("file_url, file_type, uploaded_by, status, year, semester")
       .eq("id", questionId)
       .single();
     const question = rawQuestion as unknown as {
@@ -53,6 +53,8 @@ export async function POST(req: Request) {
       file_type: string;
       uploaded_by: string;
       status: string;
+      year: number;
+      semester: string;
     } | null;
 
     if (!question) {
@@ -135,7 +137,7 @@ export async function POST(req: Request) {
 Analyze the attached file carefully and return ONLY a valid JSON object — no preamble, no markdown, no explanation:
 { "pass": true or false, "reason": "..." }
 
-Evaluate all four criteria. Fail if ANY single criterion is not met:
+Evaluate all five criteria. Fail if ANY single criterion is not met:
 
 1. EXAM DOCUMENT: Is this file clearly a university examination, test paper, or past question paper? It should look like an official academic assessment with questions students are expected to answer.
 
@@ -144,6 +146,8 @@ Evaluate all four criteria. Fail if ANY single criterion is not met:
 3. COURSE MATCH: Does the visible content of the document match the course it has been tagged as: "${courseCode} — ${courseName}"? Look for course codes, subject matter, programme references, or any visible header information.
 
 4. SAFE CONTENT: Is the document free from harmful, offensive, sexually explicit, or completely unrelated content?
+
+5. SESSION/SEMESTER MATCH: If the document visibly displays a semester label (e.g. "FIRST SEMESTER EXAMINATION" / "SECOND SEMESTER EXAMINATION") or an academic session (e.g. "2025/2026"), does it match what was provided: Semester "${question.semester === "first" ? "First" : "Second"}", Session "${question.year}/${Number(question.year) + 1}"? If the document does NOT clearly show semester or session information anywhere on the visible page, this criterion automatically passes — do not fail a document for missing information, only for a visible, legible MISMATCH.
 
 Keep the reason field under 20 words. If pass is true, reason can be empty string.
 Return JSON only.`;
