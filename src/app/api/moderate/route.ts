@@ -95,7 +95,17 @@ export async function POST(req: Request) {
     const fileValidation = validateFile(fileData.type, fileData.size);
     if (!fileValidation.valid) {
       logger.info({ event: "moderate.file_rejected", message: "File rejected by validation", userId: user.id, metadata: { questionId, reason: fileValidation.error } });
-      await service.storage.from("pending").remove([question.file_url]);
+
+      const { data: allPages } = await service
+        .from("past_question_pages")
+        .select("file_url")
+        .eq("question_id", questionId);
+
+      if (allPages) {
+        const allPaths = allPages.map((p: { file_url: string }) => p.file_url);
+        await service.storage.from("pending").remove(allPaths);
+      }
+
       await service
         .from("past_questions")
         .update({
@@ -155,6 +165,16 @@ Return JSON only.`;
     try {
       verdict = JSON.parse(raw.replace(/```json|```/g, "").trim());
     } catch {
+      const { data: allPages } = await service
+        .from("past_question_pages")
+        .select("file_url")
+        .eq("question_id", questionId);
+
+      if (allPages) {
+        const allPaths = allPages.map((p: { file_url: string }) => p.file_url);
+        await service.storage.from("pending").remove(allPaths);
+      }
+
       await service
         .from("past_questions")
         .update({
@@ -162,8 +182,6 @@ Return JSON only.`;
           ai_rejection_reason: "Review could not be completed — please re-upload",
         } as never)
         .eq("id", questionId);
-
-      await service.storage.from("pending").remove([question.file_url]);
 
       logger.error({ event: "moderate.gemini_parse_failed", message: "Failed to parse Gemini response", userId: user.id, metadata: { questionId, raw } });
       return NextResponse.json(
@@ -173,43 +191,108 @@ Return JSON only.`;
     }
 
     if (verdict.pass) {
-      const ext = question.file_type === "pdf" ? "pdf" : "jpg";
-      const newPath = `approved/${questionId}.${ext}`;
+      const { data: allPages } = await service
+        .from("past_question_pages")
+        .select("page_number, file_url, file_type")
+        .eq("question_id", questionId)
+        .order("page_number", { ascending: true });
 
-      const { error: uploadError } = await service.storage
-        .from("approved")
-        .upload(newPath, fileData);
+      if (!allPages || allPages.length === 0) {
+        logger.error({ event: "moderate.no_pages", message: "No pages found for approved question", userId: user.id, metadata: { questionId } });
+        return NextResponse.json({ error: "No pages found" }, { status: 500 });
+      }
 
-      if (uploadError) {
-        logger.error({ event: "moderate.upload_failed", message: "Failed to move file to approved bucket", userId: user.id, metadata: { questionId, error: uploadError.message } });
+      const pendingPaths: string[] = [];
+      const approvedPaths: { oldPath: string; newPath: string }[] = [];
+
+      for (const page of allPages as { page_number: number; file_url: string; file_type: string }[]) {
+        const ext = page.file_type === "pdf" ? "pdf" : "jpg";
+        const newPath = `approved/${questionId}/page-${page.page_number}.${ext}`;
+        approvedPaths.push({ oldPath: page.file_url, newPath });
+        pendingPaths.push(page.file_url);
+      }
+
+      let page1Approved = false;
+      const page1NewPath = approvedPaths[0]?.newPath;
+
+      for (const { oldPath, newPath } of approvedPaths) {
+        try {
+          const { data: fileData } = await service.storage
+            .from("pending")
+            .download(oldPath);
+
+          if (fileData) {
+            const { error: uploadError } = await service.storage
+              .from("approved")
+              .upload(newPath, fileData);
+
+            if (uploadError) {
+              logger.error({ event: "moderate.page_move_failed", message: "Failed to move page to approved bucket", userId: user.id, metadata: { questionId, oldPath, newPath, error: uploadError.message } });
+            } else {
+              if (newPath === page1NewPath) page1Approved = true;
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error({ event: "moderate.page_move_error", message: "Error moving page to approved", userId: user.id, metadata: { questionId, oldPath, newPath, error: msg } });
+        }
+      }
+
+      await service.storage.from("pending").remove(pendingPaths);
+
+      const pageUrlsToUpdate: Record<number, string> = {};
+      for (const { oldPath, newPath } of approvedPaths) {
+        const page = allPages.find((p: { file_url: string }) => p.file_url === oldPath) as { page_number: number } | undefined;
+        if (page) {
+          pageUrlsToUpdate[page.page_number] = newPath;
+        }
+      }
+
+      const updatesNeeded = Object.keys(pageUrlsToUpdate).length > 0;
+      if (updatesNeeded && page1Approved && page1NewPath) {
+        const { error: updateError } = await service
+          .from("past_questions")
+          .update({
+            status: "published",
+            file_url: page1NewPath,
+          } as never)
+          .eq("id", questionId);
+
+        if (updateError) {
+          logger.error({ event: "moderate.update_failed", message: "Failed to update question status after approval", userId: user.id, metadata: { questionId, error: updateError.message } });
+          return NextResponse.json(
+            { error: "Failed to publish question" },
+            { status: 500 },
+          );
+        }
+
+        for (const [pageNum, newUrl] of Object.entries(pageUrlsToUpdate)) {
+          await service
+            .from("past_question_pages")
+            .update({ file_url: newUrl } as never)
+            .eq("question_id", questionId)
+            .eq("page_number", parseInt(pageNum));
+        }
+      } else if (!page1Approved) {
+        logger.error({ event: "moderate.page1_not_approved", message: "Critical page 1 was not moved to approved", userId: user.id, metadata: { questionId } });
         return NextResponse.json(
-          { error: "Failed to move file to approved" },
+          { error: "Failed to move all files to approved storage" },
           { status: 500 },
         );
       }
 
-      await service.storage.from("pending").remove([question.file_url]);
-
-      const { error: updateError } = await service
-        .from("past_questions")
-        .update({
-          status: "published",
-          file_url: newPath,
-        } as never)
-        .eq("id", questionId);
-
-      if (updateError) {
-        logger.error({ event: "moderate.update_failed", message: "Failed to update question status after approval", userId: user.id, metadata: { questionId, error: updateError.message } });
-        return NextResponse.json(
-          { error: "Failed to publish question" },
-          { status: 500 },
-        );
-      }
-
-      logger.info({ event: "moderate.passed", message: "Question passed moderation", userId: user.id, metadata: { questionId }, durationMs: Date.now() - start });
+      logger.info({ event: "moderate.passed", message: "Question passed moderation", userId: user.id, metadata: { questionId, pageCount: allPages.length }, durationMs: Date.now() - start });
       return NextResponse.json({ pass: true, reason: "" });
     } else {
-      await service.storage.from("pending").remove([question.file_url]);
+      const { data: allPages } = await service
+        .from("past_question_pages")
+        .select("file_url")
+        .eq("question_id", questionId);
+
+      if (allPages) {
+        const allPaths = allPages.map((p: { file_url: string }) => p.file_url);
+        await service.storage.from("pending").remove(allPaths);
+      }
 
       await service
         .from("past_questions")

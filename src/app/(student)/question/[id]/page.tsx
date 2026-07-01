@@ -35,6 +35,13 @@ interface Solution {
   } | null;
 }
 
+interface PastQuestionPage {
+  id: string;
+  page_number: number;
+  file_url: string;
+  file_type: string;
+}
+
 interface Question {
   id: string;
   course_id: string;
@@ -42,7 +49,6 @@ interface Question {
   semester: string;
   exam_type: string;
   file_url: string;
-  file_url_2: string | null;
   file_type: string;
   flag_count: number;
   status: string;
@@ -63,6 +69,7 @@ export default function QuestionPage({
   params: { id: string };
 }) {
   const [question, setQuestion] = useState<Question | null>(null);
+  const [pages, setPages] = useState<PastQuestionPage[]>([]);
   const [solutions, setSolutions] = useState<Solution[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSolutionsModal, setShowSolutionsModal] = useState(false);
@@ -79,7 +86,7 @@ export default function QuestionPage({
         return;
       }
 
-      const [questionRes, solutionsRes] = await Promise.all([
+      const [questionRes, pagesRes, solutionsRes] = await Promise.all([
         supabase
           .from("past_questions")
           .select(
@@ -90,6 +97,11 @@ export default function QuestionPage({
           )
           .eq("id", params.id)
           .single(),
+        supabase
+          .from("past_question_pages")
+          .select("id, page_number, file_url, file_type")
+          .eq("question_id", params.id)
+          .order("page_number", { ascending: true }),
         supabase
           .from("solutions")
           .select(
@@ -110,6 +122,9 @@ export default function QuestionPage({
       }
       const q = questionRes.data as unknown as Question;
       setQuestion(q);
+
+      const loadedPages = (pagesRes.data ?? []) as PastQuestionPage[];
+      setPages(loadedPages);
 
       if (solutionsRes.error) {
         toast.error("Could not load solutions");
@@ -196,45 +211,29 @@ export default function QuestionPage({
 
       {/* File Viewer(s) */}
       <div className="animate-fade-in-up stagger-2 space-y-4">
-        {question.file_type === "pdf" ? (
-          <iframe
-            src={`/api/storage/${question.file_url}`}
-            className="w-full min-h-[600px] rounded-2xl border border-gray-200 bg-white"
-            title={`Past question ${question.year}`}
-          />
-        ) : (
-          <div className="rounded-2xl overflow-hidden border border-gray-200">
-            <img
-              src={`/api/storage/${question.file_url}`}
-              alt={`Past question ${question.year} — front`}
-              className="max-w-full h-auto"
-            />
-          </div>
-        )}
-
-        {question.file_url_2 && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <p className="mb-3 text-sm font-medium text-gray-600 flex items-center gap-2">
+        {pages.map((page) => (
+          <div key={page.id} className="rounded-2xl border border-gray-200 bg-white">
+            <p className="mb-3 px-4 pt-4 text-sm font-medium text-gray-600 flex items-center gap-2">
               <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-3.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-1.5A1.125 1.125 0 0118 18.375M20.625 4.5H3.375m17.25 0c.621 0 1.125.504 1.125 1.125M20.625 4.5h-1.5C18.504 4.5 18 5.004 18 5.625m3.75 0v1.5c0 .621-.504 1.125-1.125 1.125M3.375 4.5c-.621 0-1.125.504-1.125 1.125M3.375 4.5h1.5C5.496 4.5 6 5.004 6 5.625m-3.75 0v1.5c0 .621.504 1.125 1.125 1.125m0 0h1.5m-1.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m1.5-3.75C5.496 8.25 6 7.746 6 7.125v-1.5M4.875 8.25C5.496 8.25 6 8.754 6 9.375v1.5m0-5.25v5.25m0-5.25C6 5.004 6.504 4.5 7.125 4.5h9.75c.621 0 1.125.504 1.125 1.125m1.125 2.625h1.5m-1.5 0a1.125 1.125 0 01-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125m1.5 3.75v-1.5c0-.621-.504-1.125-1.125-1.125m1.5 3.75c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-9.75-6.75h1.5m-1.5 0a1.125 1.125 0 00-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m8.25 0a1.125 1.125 0 011.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125M15 8.25v-.375m0 0a1.125 1.125 0 012.25 0v.375M15 8.25a1.125 1.125 0 00-1.125 1.125v.375M15 8.25c.621 0 1.125.504 1.125 1.125v.375m-2.25 0h2.25M3.375 8.25h17.25" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
               </svg>
-              Back Page
+              Page {page.page_number}
             </p>
-            {question.file_type === "pdf" ? (
+            {page.file_type === "pdf" ? (
               <iframe
-                src={`/api/storage/${question.file_url_2}`}
-                className="w-full min-h-[400px] rounded-xl border border-gray-200"
-                title={`Past question ${question.year} — back`}
+                src={`/api/storage/${page.file_url}`}
+                className="w-full min-h-[600px] rounded-2xl border-0"
+                title={`Past question ${question.year} — page ${page.page_number}`}
               />
             ) : (
               <img
-                src={`/api/storage/${question.file_url_2}`}
-                alt={`Past question ${question.year} — back`}
-                className="max-w-full h-auto rounded-xl"
+                src={`/api/storage/${page.file_url}`}
+                alt={`Past question ${question.year} — page ${page.page_number}`}
+                className="max-w-full h-auto"
               />
             )}
           </div>
-        )}
+        ))}
       </div>
 
       <hr className="animate-fade-in border-white/70" />

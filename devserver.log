@@ -41,3 +41,27 @@ digest: "4061718808"
  ✓ Compiled in 963ms (693 modules)
  ✓ Compiled in 1786ms (1515 modules)
  GET /upload 200 in 2539ms
+ GET /upload 200 in 2831ms
+ ✓ Compiled in 10.1s (693 modules)
+[EQB] {"t":"2026-07-01T00:30:32.458Z","lvl":"warn","ev":"auth.unauthorized","msg":"Redirected unauthenticated user to login","ip":"::ffff:127.0.0.1","p":"/upload"}
+ ○ Compiling /login ...
+ ✓ Compiled /login in 6s (1543 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 587ms (859 modules)
+ GET /_next/static/css/app/layout.css?v=1782865838953 404 in 1256ms
+ GET /_next/static/css/app/layout.css?v=1782865838953 404 in 157ms
+[EQB] {"t":"2026-07-01T00:48:17.668Z","lvl":"warn","ev":"auth.unauthorized","msg":"Redirected unauthenticated user to login","ip":"::ffff:127.0.0.1","p":"/upload"}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 9.4s (1784 modules)
+ GET /login 404 in 10095ms
+ GET /favicon.ico 500 in 983ms
+ GET /login 200 in 396ms
+ GET /login 200 in 157ms
+ GET /_next/static/css/app/layout.css?v=1782866915084 404 in 178ms
+ GET /_next/static/chunks/main-app.js?v=1782866915084 404 in 165ms
+ ✓ Compiled in 5.4s (1783 modules)
+ ✓ Compiled in 10.2s (1783 modules)
+ ✓ Compiled in 2.2s (1783 modules)
+ ✓ Compiled in 8.7s (1783 modules)
+ ✓ Compiled in 1474ms (885 modules)
+ ✓ Compiled in 1152ms (885 modules)

@@ -294,6 +294,41 @@ export type Database = {
           },
         ]
       }
+      past_question_pages: {
+        Row: {
+          created_at: string | null
+          file_type: string
+          file_url: string
+          id: string
+          page_number: number
+          question_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_type: string
+          file_url: string
+          id?: string
+          page_number: number
+          question_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          page_number?: number
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "past_question_pages_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "past_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_otps: {
         Row: {
           code: string

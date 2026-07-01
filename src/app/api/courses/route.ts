@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       .single();
     const profile = rawProfile as unknown as { department_id: string } | null;
     if (!profile?.department_id) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+      return NextResponse.json({ error: "Your profile does not have a department assigned. Please contact support." }, { status: 404 });
     }
 
     const service = createServiceClient();
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       .insert({
         code: code.toUpperCase(),
         title,
-        level: parseInt(level),
+        level: parseInt(level, 10),
         department_id: profile.department_id,
         scope,
       } as never)
@@ -42,13 +42,19 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       logger.error({ event: "courses.create_failed", message: "Failed to create course", userId: user.id, metadata: { error: error.message } });
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: error.message || "Failed to create course" }, { status: 500 });
+    }
+
+    if (!newCourse) {
+      logger.error({ event: "courses.create_no_return", message: "Course insert succeeded but no data returned", userId: user.id, metadata: { code } });
+      return NextResponse.json({ error: "Failed to retrieve created course" }, { status: 500 });
     }
 
     logger.info({ event: "courses.created", message: "Course created by student", userId: user.id, metadata: { code, title, scope } });
     return NextResponse.json({ course: newCourse });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    logger.error({ event: "courses.create_exception", message: "Exception creating course", userId: "unknown", metadata: { error: msg } });
+    return NextResponse.json({ error: msg || "Failed to create course" }, { status: 500 });
   }
 }

@@ -27,12 +27,13 @@ const SCOPE_LABELS: Record<string, string> = {
   general: "General",
 };
 
+const MAX_PAGES = 6;
+
 export function UploadForm({ courses: initialCourses, preselectedCourseId }: { courses: Course[]; preselectedCourseId?: string | null }) {
   const supabase = createClient();
 
   const [courses, setCourses] = useState<Course[]>(initialCourses);
-  const [file, setFile] = useState<File | null>(null);
-  const [file2, setFile2] = useState<File | null>(null);
+  const [pages, setPages] = useState<(File | null)[]>([null]);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState("");
@@ -51,7 +52,7 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
     watch,
     formState: { isSubmitting },
   } = useForm<UploadData>({
-    resolver: zodResolver(uploadSchema) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(uploadSchema) as any,
     defaultValues: {
       courseId: "",
       year: new Date().getFullYear(),
@@ -102,10 +103,9 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
     }
   };
 
-  const uploadFile = async (f: File, prefix: string): Promise<string> => {
+  const uploadFile = async (f: File, questionId: string, pageNumber: number): Promise<string> => {
     const ext = f.name.split(".").pop();
-    const fileId = `${prefix}-${crypto.randomUUID()}`;
-    const filePath = `pending/${fileId}.${ext}`;
+    const filePath = `pending/${questionId}/page-${pageNumber}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("pending")
       .upload(filePath, f);
@@ -115,9 +115,10 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
 
   const onSubmit = useCallback(
     async (data: UploadData) => {
-      if (!file) {
-        setError("Please select a file for the front page");
-        toast.warning("Please select a file for the front page");
+      const firstPage = pages[0];
+      if (!firstPage) {
+        setError("Please select a file for page 1");
+        toast.warning("Please select a file for page 1");
         return;
       }
       setError("");
@@ -128,6 +129,7 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
       } = await supabase.auth.getUser();
       if (!user) {
         toast.error("You need to sign in to upload");
+        setUploadState("idle");
         return;
       }
 
@@ -151,15 +153,32 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
       }
 
       const course = courses.find((c) => c.id === data.courseId);
-      if (!course) return;
+      if (!course) {
+        setError("Please select a course");
+        setUploadState("idle");
+        return;
+      }
 
-      let filePath = "";
-      let file2Path: string | null = null;
+      const questionId = crypto.randomUUID();
+
+      const uploadedPages: { pageNumber: number; filePath: string; fileType: string }[] = [];
 
       try {
-        filePath = await uploadFile(file, "front");
-        if (file2) {
-          file2Path = await uploadFile(file2, "back");
+        uploadedPages.push({
+          pageNumber: 1,
+          filePath: await uploadFile(firstPage, questionId, 1),
+          fileType: firstPage.type === "application/pdf" ? "pdf" : "image",
+        });
+
+        for (let i = 1; i < pages.length; i++) {
+          const pageFile = pages[i];
+          if (pageFile) {
+            uploadedPages.push({
+              pageNumber: i + 1,
+              filePath: await uploadFile(pageFile, questionId, i + 1),
+              fileType: pageFile.type === "application/pdf" ? "pdf" : "image",
+            });
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Upload failed";
@@ -169,8 +188,6 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
         return;
       }
 
-      const questionId = crypto.randomUUID();
-
       const { error: insertError } = await supabase
         .from("past_questions")
         .insert({
@@ -178,9 +195,8 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
           course_id: data.courseId,
           uploaded_by: profile.id,
           level: course.level,
-          file_url: filePath,
-          file_url_2: file2Path,
-          file_type: file.type === "application/pdf" ? "pdf" : "image",
+          file_url: uploadedPages[0].filePath,
+          file_type: uploadedPages[0].fileType,
           year: data.year,
           semester: data.semester,
           exam_type: data.examType,
@@ -191,6 +207,27 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
         setError(insertError.message || "Failed to create question record.");
         setUploadState("idle");
         toast.error(insertError.message || "Failed to create question record.");
+        return;
+      }
+
+      const pagesToInsert = uploadedPages.map((p) => ({
+        question_id: questionId,
+        page_number: p.pageNumber,
+        file_url: p.filePath,
+        file_type: p.fileType,
+      }));
+
+      const { error: pagesInsertError } = await supabase
+        .from("past_question_pages")
+        .insert(pagesToInsert as never);
+
+      if (pagesInsertError) {
+        await supabase.from("past_questions").delete().eq("id", questionId);
+        const pendingPaths = uploadedPages.map((p) => p.filePath);
+        await supabase.storage.from("pending").remove(pendingPaths);
+        setError("Failed to save pages. Please try again.");
+        setUploadState("idle");
+        toast.error("Failed to save pages. Please try again.");
         return;
       }
 
@@ -217,8 +254,27 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
         toast.error(result.reason || "Upload rejected by AI review");
       }
     },
-    [file, file2, supabase, courses],
+    [pages, supabase, courses],
   );
+
+  const handlePageSelect = (index: number, file: File | null) => {
+    setPages((prev) => {
+      const updated = [...prev];
+      updated[index] = file;
+      return updated;
+    });
+  };
+
+  const addPage = () => {
+    if (pages.length < MAX_PAGES) {
+      setPages((prev) => [...prev, null]);
+    }
+  };
+
+  const removePage = (index: number) => {
+    if (pages.length <= 1) return;
+    setPages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   if (uploadState === "rejected") {
     return (
@@ -231,8 +287,7 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
           onClick={() => {
             setUploadState("idle");
             setRejectionReason("");
-            setFile(null);
-            setFile2(null);
+            setPages([null]);
           }}
           className="mt-4 rounded-md bg-danger-600 px-4 py-2 text-sm font-medium text-white hover:bg-danger-700"
         >
@@ -243,75 +298,150 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Front Page File */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Front Page <span className="text-danger-500">*</span>
-        </label>
-        <FileDropzone file={file} onFileSelect={setFile} />
-      </div>
-
-      {/* Back Page File (optional) */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Back Page <span className="text-gray-400 font-normal">(optional — if exam paper has two sides)</span>
-        </label>
-        <FileDropzone file={file2} onFileSelect={setFile2} />
-        {file2 && (
-          <p className="mt-1.5 text-xs text-gray-500 flex items-center gap-1">
-            <svg className="h-3.5 w-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            Only the <strong>front page</strong> is sent for AI review. The back page is stored as-is and displayed alongside it.
-          </p>
-        )}
-      </div>
-
-      {/* Course Select */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Course
-        </label>
-        <div className="mt-1 flex gap-2">
-          <select
-            id="courseId"
-            {...register("courseId")}
-            className="block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-          >
-            <option value="">Select course</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} — {c.title}
-                {c.scope !== "departmental" ? ` (${SCOPE_LABELS[c.scope] ?? c.scope})` : ""}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setShowAddCourse(true)}
-            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Add
-          </button>
+    <>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Pages */}
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Pages <span className="text-danger-500">*</span>
+          </label>
+          {pages.map((file, index) => (
+            <div key={index}>
+              <FileDropzone file={file} onFileSelect={(f) => handlePageSelect(index, f)} />
+              <p className="mt-1.5 text-xs text-gray-500 text-center">
+                Page {index + 1}
+                {index === 0 && <span className="text-danger-500"> (required)</span>}
+                {index > 0 && pages.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removePage(index)}
+                    className="ml-2 text-danger-600 hover:text-danger-800 font-medium"
+                  >
+                    Remove
+                  </button>
+                )}
+              </p>
+              {index === 0 && pages.length > 1 && (
+                <p className="mt-1 text-xs text-gray-400 flex items-center gap-1">
+                  <svg className="h-3.5 w-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  Only <strong>page 1</strong> is sent for AI review. Additional pages are stored as-is and displayed alongside it.
+                </p>
+              )}
+            </div>
+          ))}
+          {pages.length < MAX_PAGES && (
+            <button
+              type="button"
+              onClick={addPage}
+              className="w-full rounded-md border-2 border-dashed border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors"
+            >
+              + Add another page
+            </button>
+          )}
         </div>
-        {selectedCourse && (
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              selectedCourse.scope === "general"
-                ? "bg-purple-100 text-purple-800"
-                : selectedCourse.scope === "shared"
-                ? "bg-blue-100 text-blue-800"
-                : "bg-gray-100 text-gray-700"
-            }`}>
-              {SCOPE_LABELS[selectedCourse.scope] ?? selectedCourse.scope}
-            </span>
-            <span className="text-xs text-gray-400">
-              {selectedCourse.level} Level
-            </span>
+
+        {/* Course Select */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Course
+          </label>
+          <div className="mt-1 flex gap-2">
+            <select
+              id="courseId"
+              {...register("courseId")}
+              className="block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+            >
+              <option value="">Select course</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} — {c.title}
+                  {c.scope !== "departmental" ? ` (${SCOPE_LABELS[c.scope] ?? c.scope})` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowAddCourse(true)}
+              className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Add
+            </button>
           </div>
-        )}
-      </div>
+          {selectedCourse && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                selectedCourse.scope === "general"
+                  ? "bg-purple-100 text-purple-800"
+                  : selectedCourse.scope === "shared"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-gray-100 text-gray-700"
+              }`}>
+                {SCOPE_LABELS[selectedCourse.scope] ?? selectedCourse.scope}
+              </span>
+              <span className="text-xs text-gray-400">
+                {selectedCourse.level} Level
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="year" className="block text-sm font-medium text-gray-700">
+              Year
+            </label>
+            <input
+              id="year"
+              type="number"
+              {...register("year")}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          <div>
+            <label htmlFor="semester" className="block text-sm font-medium text-gray-700">
+              Semester
+            </label>
+            <select
+              id="semester"
+              {...register("semester")}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+            >
+              <option value="first">First</option>
+              <option value="second">Second</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="examType" className="block text-sm font-medium text-gray-700">
+            Exam Type
+          </label>
+          <select
+            id="examType"
+            {...register("examType")}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="examination">Examination</option>
+            <option value="mid_semester">Mid Semester</option>
+          </select>
+        </div>
+
+        {error && <p className="text-sm text-danger-600">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={isSubmitting || uploadState === "uploading" || uploadState === "reviewing"}
+          className="w-full rounded-md bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {uploadState === "uploading"
+            ? "Uploading files..."
+            : uploadState === "reviewing"
+              ? "AI is reviewing your upload..."
+              : "Upload past question"}
+        </button>
+      </form>
 
       {showAddCourse && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddCourse(false)}>
@@ -389,62 +519,7 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
           </form>
         </div>
       )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="year" className="block text-sm font-medium text-gray-700">
-            Year
-          </label>
-          <input
-            id="year"
-            type="number"
-            {...register("year")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-          />
-        </div>
-        <div>
-          <label htmlFor="semester" className="block text-sm font-medium text-gray-700">
-            Semester
-          </label>
-          <select
-            id="semester"
-            {...register("semester")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-          >
-            <option value="first">First</option>
-            <option value="second">Second</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="examType" className="block text-sm font-medium text-gray-700">
-          Exam Type
-        </label>
-        <select
-          id="examType"
-          {...register("examType")}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-        >
-          <option value="examination">Examination</option>
-          <option value="mid_semester">Mid Semester</option>
-        </select>
-      </div>
-
-      {error && <p className="text-sm text-danger-600">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={isSubmitting || uploadState === "uploading" || uploadState === "reviewing"}
-        className="w-full rounded-md bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {uploadState === "uploading"
-          ? "Uploading files..."
-          : uploadState === "reviewing"
-            ? "AI is reviewing your upload..."
-            : "Upload past question"}
-      </button>
-    </form>
+    </>
   );
 }
 export default UploadForm;
