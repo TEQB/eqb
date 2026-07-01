@@ -32,8 +32,21 @@ export async function POST(req: Request) {
 
     const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
     if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
-      logger.warn({ event: "otp.send.invalid_domain", message: "Email domain not allowed", ip, email });
-      return NextResponse.json({ error: `Only ${allowedDomain} emails are accepted` }, { status: 400 });
+      logger.warn({ event: "otp.send.invalid_input", message: "Invalid registration input", ip, email });
+      return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
+    }
+
+    const service = createServiceClient();
+    if (matricNumber) {
+      const { data: existingProfile } = await service
+        .from("profiles")
+        .select("id")
+        .eq("matric_number", matricNumber.trim().toUpperCase())
+        .maybeSingle();
+      if (existingProfile) {
+        logger.warn({ event: "otp.send.duplicate_matric", message: "Matric number already registered", ip, email });
+        return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
+      }
     }
 
     const rateKey = `send-otp:${ip}:${email.toLowerCase()}`;
@@ -45,12 +58,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createServiceClient();
     const code = generateCode();
     const codeHash = hashOtp(code);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    const { error: dbError } = await supabase.from("pending_otps").insert({
+    const { error: dbError } = await service.from("pending_otps").insert({
       email,
       code: codeHash,
       expires_at: expiresAt,
@@ -62,7 +74,7 @@ export async function POST(req: Request) {
     }
 
     if (fullName && matricNumber && departmentId && currentLevel) {
-      await supabase.from("pending_registrations").upsert({
+      await service.from("pending_registrations").upsert({
         email,
         full_name: fullName,
         matric_number: matricNumber,

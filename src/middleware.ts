@@ -2,6 +2,36 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// Simple in-memory rate limiter for edge/runtime constraints.
+// Key = IP address, value = { count, windowStart }.
+// Fixed 15-minute sliding window, 30 auth attempts max per IP.
+const authRateLimitMap = new Map<
+  string,
+  { count: number; windowStart: number }
+>();
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX = 30;
+
+function checkAuthRateLimit(ip: string): {
+  allowed: boolean;
+  retryAfterSeconds: number;
+} {
+  const now = Date.now();
+  const record = authRateLimitMap.get(ip);
+  if (!record || now - record.windowStart >= AUTH_RATE_LIMIT_WINDOW_MS) {
+    authRateLimitMap.set(ip, { count: 1, windowStart: now });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+  if (record.count >= AUTH_RATE_LIMIT_MAX) {
+    const retryAfter = Math.ceil(
+      (AUTH_RATE_LIMIT_WINDOW_MS - (now - record.windowStart)) / 1000,
+    );
+    return { allowed: false, retryAfterSeconds: retryAfter };
+  }
+  record.count++;
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, protocol } = request.nextUrl;
 
@@ -14,6 +44,26 @@ export async function middleware(request: NextRequest) {
     const httpsUrl = request.nextUrl.clone();
     httpsUrl.protocol = "https";
     return NextResponse.redirect(httpsUrl);
+  }
+
+  // ── Auth route rate limiting (POST only, no DB needed at edge) ──
+  if (
+    request.method === "POST" &&
+    pathname.startsWith("/api/auth/")
+  ) {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+    const { allowed, retryAfterSeconds } = checkAuthRateLimit(ip);
+    if (!allowed) {
+      const response = NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 },
+      );
+      response.headers.set("Retry-After", String(retryAfterSeconds));
+      return response;
+    }
   }
 
   let response = NextResponse.next({ request });
@@ -114,6 +164,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/auth/:path*",
     "/dashboard/:path*",
     "/browse/:path*",
     "/course/:path*",

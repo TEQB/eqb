@@ -51,20 +51,9 @@ export function SetPasswordForm() {
       return;
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setError("Account created but sign in failed");
-      toast.error("Account created but sign in failed");
-      setIsSubmitting(false);
-      return;
-    }
-
-    toast.success("Account ready — welcome to EQB!");
-    window.location.href = "/dashboard";
+    toast.success("Account created! Check your email to confirm your address, then sign in.");
+    const params = new URLSearchParams({ confirmed: email });
+    window.location.href = `/login?${params}`;
   };
 
   return (

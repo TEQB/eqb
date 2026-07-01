@@ -21,8 +21,8 @@ export async function POST(req: Request) {
 
     const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
     if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
-      logger.warn({ event: "account.create.invalid_domain", message: "Email domain not allowed", ip, email });
-      return NextResponse.json({ error: `Only ${allowedDomain} emails are accepted` }, { status: 400 });
+      logger.warn({ event: "account.create.invalid_input", message: "Invalid registration input", ip, email });
+      return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
     }
 
     if (!PASSWORD_REGEX.test(password)) {
@@ -58,10 +58,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No pending registration" }, { status: 400 });
     }
 
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("matric_number", (reg.matric_number || "").trim().toUpperCase())
+      .maybeSingle();
+
+    if (existingProfile) {
+      logger.warn({ event: "account.create.duplicate_matric", message: "Matric number already registered", ip, email, metadata: { matricNumber: reg.matric_number } });
+      return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
+    }
+
     const { error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: {
         full_name: reg.full_name,
         matric_number: reg.matric_number,
