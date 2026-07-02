@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "@/components/ui/toaster";
 import { SolutionsModal } from "@/components/admin/SolutionsModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatSession } from "@/lib/utils";
 
 interface Question {
   id: string;
@@ -15,7 +17,9 @@ interface Question {
   status: string;
   flag_count: number;
   created_at: string;
+  level: number;
   uploader_email: string | null;
+  programme_name?: string | null;
   courses: {
     code: string;
     title: string;
@@ -50,6 +54,15 @@ export default function AdminQuestionsPage({
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [selectedQuestion, setSelectedQuestion] = useState<{ id: string; code: string } | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [editYear, setEditYear] = useState("");
+  const [editSemester, setEditSemester] = useState("first");
+  const [editExamType, setEditExamType] = useState("examination");
+  const [editLevel, setEditLevel] = useState("100");
+  const [editCourseCode, setEditCourseCode] = useState("");
+  const [editCourseTitle, setEditCourseTitle] = useState("");
+  const [editCourseLevel, setEditCourseLevel] = useState("100");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin?action=programmes")
@@ -135,6 +148,62 @@ export default function AdminQuestionsPage({
       default: return "bg-gray-100 text-gray-700";
     }
   };
+
+  useEffect(() => {
+    if (!editingQuestion) return;
+    setEditYear(String(editingQuestion.year));
+    setEditSemester(editingQuestion.semester || "first");
+    setEditExamType(editingQuestion.exam_type || "examination");
+    setEditLevel(String(editingQuestion.level || 100));
+    setEditCourseCode(editingQuestion.courses?.code || "");
+    setEditCourseTitle(editingQuestion.courses?.title || "");
+    setEditCourseLevel(String(editingQuestion.courses?.level || editingQuestion.level || 100));
+  }, [editingQuestion]);
+
+  async function handleSaveQuestionEdit() {
+    if (!editingQuestion) return;
+    setSavingEdit(true);
+    try {
+      const formData = new FormData();
+      formData.set("id", editingQuestion.id);
+      formData.set("year", editYear);
+      formData.set("semester", editSemester);
+      formData.set("exam_type", editExamType);
+      formData.set("level", editLevel);
+
+      const res = await fetch("/api/admin?action=update-question", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+
+      if (editingQuestion.course_id && editingQuestion.courses) {
+        const courseForm = new FormData();
+        courseForm.set("id", editingQuestion.course_id);
+        courseForm.set("code", editCourseCode);
+        courseForm.set("title", editCourseTitle);
+        courseForm.set("level", editCourseLevel);
+
+        const courseRes = await fetch("/api/admin?action=update-course", {
+          method: "POST",
+          body: courseForm,
+        });
+        const courseData = await courseRes.json();
+        if (!courseRes.ok) throw new Error(courseData.error || "Course update failed");
+      }
+
+      toast.success("Question updated");
+      setEditingQuestion(null);
+      fetchQuestions();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Update failed";
+      toast.error(message);
+      setError(message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -248,10 +317,17 @@ export default function AdminQuestionsPage({
                     {q.courses?.code || q.course_id?.slice(0, 8)}
                   </td>
                   <td className="px-5 py-4 text-gray-700">
-                    {q.courses?.title || "-"}
+                    <div className="space-y-1">
+                      <p className="font-medium text-gray-900">{q.courses?.title || "-"}</p>
+                      <span className="inline-flex rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+                        {q.programme_name || q.courses?.programme?.name || (q.courses?.department_id ? "Unknown programme" : "General")}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-gray-700">
-                    {q.courses?.programme?.name || "-"}
+                    <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                      {q.programme_name || q.courses?.programme?.name || (q.courses?.department_id ? "Unknown" : "General")}
+                    </span>
                   </td>
                   <td className="px-5 py-4 text-gray-700">
                     {q.courses?.level || "-"}
@@ -287,6 +363,18 @@ export default function AdminQuestionsPage({
                         className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100"
                       >
                         Solutions
+                      </button>
+                      <button
+                        onClick={() => setEditingQuestion(q)}
+                        title="Edit question and course details"
+                        aria-label="Edit question and course details"
+                        className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-100"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.654-1.653a1.125 1.125 0 111.591 1.59L8.59 16.938a4.5 4.5 0 00-1.908 1.188l-2.287 2.287a.375.375 0 01-.53 0l-.53-.53a.375.375 0 010-.53l2.287-2.287A4.5 4.5 0 007.81 15.16L16.862 4.487z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 20.25h-15" />
+                        </svg>
+                        Edit
                       </button>
                       {q.status === "pending_review" && (
                         <button
@@ -351,6 +439,143 @@ export default function AdminQuestionsPage({
         onDeleted={() => {}}
         onSolutionsChanged={fetchQuestions}
       />
+
+      <Dialog open={editingQuestion !== null} onOpenChange={(open) => !open && setEditingQuestion(null)}>
+        <DialogContent className="max-w-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Edit question details</DialogTitle>
+          </DialogHeader>
+          {editingQuestion && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-900">{editingQuestion.courses?.code || "Course"}</p>
+                <p className="mt-1 text-sm text-gray-600">{editingQuestion.courses?.title || "-"}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Programme: {editingQuestion.programme_name || editingQuestion.courses?.programme?.name || "General"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Current session: {formatSession(editingQuestion.year)}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="block text-xs font-medium text-gray-700">Session / Year</span>
+                  <input
+                    type="number"
+                    value={editYear}
+                    onChange={(e) => setEditYear(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="block text-xs font-medium text-gray-700">Level</span>
+                  <select
+                    value={editLevel}
+                    onChange={(e) => setEditLevel(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  >
+                    {[100, 200, 300, 400, 500].map((level) => (
+                      <option key={level} value={level}>{level}L</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-1">
+                  <span className="block text-xs font-medium text-gray-700">Semester</span>
+                  <select
+                    value={editSemester}
+                    onChange={(e) => setEditSemester(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  >
+                    <option value="first">First Semester</option>
+                    <option value="second">Second Semester</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1">
+                  <span className="block text-xs font-medium text-gray-700">Exam Type</span>
+                  <select
+                    value={editExamType}
+                    onChange={(e) => setEditExamType(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  >
+                    <option value="examination">Examination</option>
+                    <option value="mid_semester">Mid Semester</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <h3 className="text-sm font-semibold text-gray-900">Course details</h3>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="block text-xs font-medium text-gray-700">Course Code</span>
+                    <input
+                      type="text"
+                      value={editCourseCode}
+                      onChange={(e) => setEditCourseCode(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </label>
+
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="block text-xs font-medium text-gray-700">Course Title</span>
+                    <input
+                      type="text"
+                      value={editCourseTitle}
+                      onChange={(e) => setEditCourseTitle(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="block text-xs font-medium text-gray-700">Course Level</span>
+                    <select
+                      value={editCourseLevel}
+                      onChange={(e) => setEditCourseLevel(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                    >
+                      {[100, 200, 300, 400, 500].map((level) => (
+                        <option key={level} value={level}>{level}L</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="space-y-1">
+                    <span className="block text-xs font-medium text-gray-700">Programme</span>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      {editingQuestion.programme_name || editingQuestion.courses?.programme?.name || "General"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <p className="text-xs text-gray-500">Question and course details update immediately after saving.</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingQuestion(null)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveQuestionEdit}
+                    disabled={savingEdit}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {savingEdit ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

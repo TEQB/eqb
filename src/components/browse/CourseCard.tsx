@@ -27,7 +27,7 @@ export function CourseCard({
     <Link
       href={`/course/${id}`}
       className={cn(
-        "group block rounded-3xl border border-white/70 bg-white/75 p-6 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl transition-all duration-normal hover:-translate-y-1 hover:border-secondary/30 hover:shadow-[0_24px_55px_rgba(63,39,50,0.14)]",
+        "group flex h-full min-h-[180px] flex-col rounded-3xl border border-white/70 bg-white/75 p-6 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl transition-all duration-normal hover:-translate-y-1 hover:border-secondary/30 hover:shadow-[0_24px_55px_rgba(63,39,50,0.14)]",
         className,
       )}
     >
@@ -44,7 +44,9 @@ export function CourseCard({
           </Badge>
         )}
       </div>
-      <p className="mt-1 text-base font-medium text-gray-900">{title}</p>
+      <p className="mt-1 line-clamp-2 text-base font-medium text-gray-900" title={title}>
+        {title}
+      </p>
       <p className="mt-2 text-sm text-gray-500 transition-colors duration-normal group-hover:text-gray-700">
         Level {level} · {questionCount} question{questionCount !== 1 ? "s" : ""}
       </p>

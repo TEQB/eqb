@@ -213,9 +213,11 @@ export async function GET(req: NextRequest) {
 
         const questionsWithProgramme = (questionsWithEmail as never as Array<Record<string, unknown>>).map((q) => {
           const course = q.courses as Record<string, unknown> | undefined;
+          const programmeName = course?.department_id ? deptMap.get(course.department_id as string) || "" : "";
           return {
             ...q,
-            courses: course ? { ...course, programme: { name: course.department_id ? deptMap.get(course.department_id as string) || "" : "" } } : null,
+            programme_name: programmeName,
+            courses: course ? { ...course, programme: { name: programmeName } } : null,
           };
         });
 
@@ -922,6 +924,31 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         } as never).eq("id", course_id);
         if (error) throw error;
         logger.info({ event: "admin.update_course", message: "Course updated", userId: user.id, metadata: { course_id, code, title } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "update-question": {
+        const question_id = formData.get("id") as string;
+        const year = parseInt(formData.get("year") as string);
+        const semester = formData.get("semester") as string;
+        const exam_type = formData.get("exam_type") as string;
+        const level = parseInt(formData.get("level") as string);
+        if (!question_id || !year || !semester || !exam_type || !level) {
+          return NextResponse.json({ error: "All fields required" }, { status: 400 });
+        }
+        const { error } = await service.from("past_questions").update({
+          year,
+          semester,
+          exam_type,
+          level,
+        } as never).eq("id", question_id);
+        if (error) throw error;
+        logger.info({
+          event: "admin.update_question",
+          message: "Question updated",
+          userId: user.id,
+          metadata: { question_id, year, semester, exam_type, level },
+        });
         return NextResponse.json({ success: true });
       }
 
