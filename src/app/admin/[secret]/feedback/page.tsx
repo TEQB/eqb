@@ -15,7 +15,7 @@ type FeedbackProfile = {
   full_name: string;
   matric_number: string;
   current_level: number;
-  department: { name: string } | null;
+  programme: { name: string } | null;
 };
 
 export default async function AdminFeedbackPage({
@@ -67,7 +67,7 @@ export default async function AdminFeedbackPage({
   if (profileIds.length > 0) {
     const { data } = await service
       .from("profiles")
-      .select("id, full_name, matric_number, current_level, department:department_id(name)")
+      .select("id, full_name, matric_number, current_level, programme:department_id(name)")
       .in("id", profileIds);
     profileRows = (data as unknown[] | null) ?? [];
   }
@@ -146,8 +146,8 @@ export default async function AdminFeedbackPage({
                     <p className="mt-1 text-xs text-gray-500">
                       {student?.matric_number ?? "No matric number"} - Level{" "}
                       {student?.current_level ?? "?"}
-                      {student?.department?.name
-                        ? ` - ${student.department.name}`
+                      {student?.programme?.name
+                        ? ` - ${student.programme.name}`
                         : ""}
                     </p>
                   </div>

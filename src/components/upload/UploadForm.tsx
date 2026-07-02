@@ -23,7 +23,7 @@ interface Course {
 type UploadState = "idle" | "uploading" | "reviewing" | "rejected";
 
 const SCOPE_LABELS: Record<string, string> = {
-  departmental: "Departmental",
+  departmental: "Programme",
   shared: "Shared",
   general: "General",
 };
@@ -504,8 +504,8 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
                 onChange={(e) => setNewScope(e.target.value as "departmental" | "shared" | "general")}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
               >
-                <option value="departmental">Departmental (only your dept)</option>
-                <option value="shared">Shared (visible to other depts)</option>
+                <option value="departmental">Programme (only your programme)</option>
+                <option value="shared">Shared (visible to other programmes)</option>
                 <option value="general">General (all students)</option>
               </select>
             </div>

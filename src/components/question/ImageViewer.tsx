@@ -15,7 +15,6 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
-  const imageRef = useRef<HTMLDivElement>(null);
 
   const resetView = useCallback(() => {
     setScale(1);
@@ -79,6 +78,25 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
       });
     }
   }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "+" || (e.ctrlKey && e.key === "=")) {
+      e.preventDefault();
+      zoomIn();
+    } else if (e.key === "-" || (e.ctrlKey && e.key === "_")) {
+      e.preventDefault();
+      zoomOut();
+    } else if (e.key === "[") {
+      e.preventDefault();
+      rotateLeft();
+    } else if (e.key === "]") {
+      e.preventDefault();
+      rotateRight();
+    } else if (e.key === "0") {
+      e.preventDefault();
+      resetView();
+    }
+  }, [zoomIn, zoomOut, rotateLeft, rotateRight, resetView]);
 
   return (
     <>
@@ -157,11 +175,13 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
         </div>
         <div
           className="overflow-hidden cursor-grab active:cursor-grabbing"
+          tabIndex={0}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
+          onKeyDown={handleKeyDown}
         >
           <img
             src={src}
@@ -238,11 +258,13 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
           </div>
           <div
             className="overflow-auto max-h-[calc(90vh-60px)] flex items-center justify-center cursor-grab active:cursor-grabbing"
+            tabIndex={0}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
+            onKeyDown={handleKeyDown}
           >
             <img
               src={src}

@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         ? {
             fullName: reg.full_name,
             matricNumber: reg.matric_number,
-            departmentId: reg.department_id,
+            programmeId: reg.department_id,
             currentLevel: reg.current_level,
           }
         : null,

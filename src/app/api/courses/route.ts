@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       .single();
     const profile = rawProfile as unknown as { department_id: string } | null;
     if (!profile?.department_id) {
-      return NextResponse.json({ error: "Your profile does not have a department assigned. Please contact support." }, { status: 404 });
+      return NextResponse.json({ error: "Your profile does not have a programme assigned. Please contact support." }, { status: 404 });
     }
 
     const service = createServiceClient();

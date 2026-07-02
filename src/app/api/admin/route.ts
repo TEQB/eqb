@@ -215,7 +215,7 @@ export async function GET(req: NextRequest) {
           const course = q.courses as Record<string, unknown> | undefined;
           return {
             ...q,
-            courses: course ? { ...course, departments: { name: course.department_id ? deptMap.get(course.department_id as string) || "" : "" } } : null,
+            courses: course ? { ...course, programme: { name: course.department_id ? deptMap.get(course.department_id as string) || "" : "" } } : null,
           };
         });
 
@@ -675,15 +675,39 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       }
 
       case "create-course": {
-        let body: { code?: string; title?: string; programme_id?: string; level?: number };
+        let body: { code?: string; title?: string; programme_id?: string | null; programmeIds?: string[]; level?: number; scope?: string; standAlone?: boolean };
         try {
-          body = await req.json();
+          body = (jsonBody ?? (await req.json())) as typeof body;
         } catch {
           return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
         }
-        const { code, title, programme_id, level } = body;
-        if (!code || !title || !programme_id || !level) {
+        const { code, title, programme_id, programmeIds, level, scope = "departmental", standAlone = false } = body;
+        const selectedProgrammeIds = programmeIds?.filter((value): value is string => !!value) ?? (programme_id ? [programme_id] : []);
+        const effectiveScope = standAlone || scope === "general" ? "general" : scope;
+        const parsedLevel = typeof level === "number" ? level : Number(level);
+        logger.info({
+          event: "admin.create_course.payload",
+          message: "Create course payload received",
+          userId: user.id,
+          metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+        });
+        if (!code || !title || Number.isNaN(parsedLevel)) {
+          logger.warn({
+            event: "admin.create_course.validation_failed",
+            message: "Create course rejected because code/title/level were invalid",
+            userId: user.id,
+            metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+          });
           return NextResponse.json({ error: "All fields are required" }, { status: 400 });
+        }
+        if (effectiveScope !== "general" && selectedProgrammeIds.length === 0) {
+          logger.warn({
+            event: "admin.create_course.validation_failed",
+            message: "Create course rejected because no programme was provided for a non-general course",
+            userId: user.id,
+            metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+          });
+          return NextResponse.json({ error: "Select at least one programme" }, { status: 400 });
         }
         const { data: existing } = await service
           .from("courses")
@@ -698,13 +722,20 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           .insert({
             code: code.toUpperCase(),
             title,
-            level,
-            department_id: programme_id,
-            scope: "departmental",
+            level: parsedLevel,
+            scope: effectiveScope,
+            department_id: effectiveScope === "departmental" ? selectedProgrammeIds[0] : null,
           } as never)
           .select("id, code, title, level")
           .single();
         if (error) throw error;
+        if ((effectiveScope === "shared" || effectiveScope === "general") && selectedProgrammeIds.length > 0) {
+          const links = selectedProgrammeIds.map((did) => ({
+            department_id: did,
+            course_id: (newCourse as { id: string }).id,
+          }));
+          await service.from("department_courses").insert(links as never);
+        }
         logger.info({ event: "admin.create_course", message: "Course created", userId: user.id, metadata: { code, title } });
         return NextResponse.json({ course: newCourse });
       }
@@ -1378,6 +1409,21 @@ Return JSON only.`;
 
         logger.info({ event: "bulk_commit.done", message: "Bulk commit completed", userId: user.id, metadata: { batchId, committed: committed.length, failed: failed.length }, durationMs: Date.now() - start });
         return NextResponse.json({ committed: committed.length, failed });
+      }
+
+      case "bulk-file-url": {
+        const { stagedPath } = await req.json();
+        if (!stagedPath) {
+          return NextResponse.json({ error: "stagedPath required" }, { status: 400 });
+        }
+        const { data, error } = await service.storage
+          .from("pending")
+          .createSignedUrl(stagedPath, 3600);
+        if (error) {
+          logger.error({ event: "admin.bulk_file_url.error", message: "Failed to create signed URL", userId: user.id, metadata: { stagedPath, error: error.message } });
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ url: data.signedUrl });
       }
 
       default:

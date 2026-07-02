@@ -23,13 +23,13 @@ export default async function StudentLayout({
   const profile = await loadStudentProfile(supabase, user.id);
   if (!profile) redirect("/login");
 
+  const prog = profile.programme;
   const [courseGroups, obligationDays] = await Promise.all([
     loadStudentCourseGroups(supabase, profile.department_id),
     loadUploadObligationDays(supabase),
   ]);
   const feedbackCount = await loadStudentFeedbackCount(supabase, profile.id);
 
-  const prog = profile.department;
   const daysRemaining = calculateDaysRemaining(
     profile.last_upload_at,
     obligationDays,
@@ -40,7 +40,7 @@ export default async function StudentLayout({
       profile={{
         id: profile.id,
         fullName: profile.full_name,
-        departmentId: profile.department_id,
+        programmeId: profile.department_id,
         currentLevel: profile.current_level,
         isLocked: profile.is_locked,
         daysRemaining,

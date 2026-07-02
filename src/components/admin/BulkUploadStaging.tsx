@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toaster";
 import { formatSession } from "@/lib/utils";
-import { X, Upload, AlertTriangle, CheckCircle2, Plus, GripVertical, ChevronUp, ChevronDown, Image as ImageIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { X, Upload, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, Image as ImageIcon, Maximize2 } from "lucide-react";
+import { ImageViewer } from "@/components/question/ImageViewer";
 
 interface ExtractedPage {
   stagedPath: string;
@@ -44,7 +45,8 @@ interface Group {
   matchedCourseId: string | null;
   possibleMatches: PossibleMatch[];
   courseId: string;
-  newCourse: { code: string; title: string; level: number; scope: string; departmentIds: string[] } | null;
+  createCoursePrompted: boolean;
+  newCourse: { code: string; title: string; level: number; scope: string; programmeIds: string[] } | null;
   year: string;
   semester: "first" | "second";
   examType: "examination" | "mid_semester";
@@ -55,12 +57,6 @@ interface Programme {
   name: string;
   faculty_id: string;
   faculty_name: string;
-}
-
-interface Faculty {
-  id: string;
-  name: string;
-  slug: string;
 }
 
 interface BulkExtractResult {
@@ -75,7 +71,6 @@ interface BulkExtractResult {
 }
 
 export function BulkUploadStaging() {
-  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [extracting, setExtracting] = useState(false);
@@ -83,13 +78,128 @@ export function BulkUploadStaging() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [courses, setCourses] = useState<ExistingCourse[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
-  const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [draggedPage, setDraggedPage] = useState<{ groupId: number; pageIndex: number } | null>(null);
   const [dragOverPage, setDragOverPage] = useState<{ groupId: number; pageIndex: number } | null>(null);
-  const [creatingCourseGroupId, setCreatingCourseGroupId] = useState<number | null>(null);
-  const [newCourseForm, setNewCourseForm] = useState({ code: "", title: "", level: "100", scope: "departmental" as "departmental" | "shared" | "general", departmentIds: [] as string[] });
-  const [selectedFacultyId, setSelectedFacultyId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [signedUrlCache, setSignedUrlCache] = useState<Record<string, string>>({});
+  const [previewPage, setPreviewPage] = useState<{ src: string; title: string; subtitle: string; groupLabel: string } | null>(null);
+  const signedUrlCacheRef = useRef<Record<string, string>>({});
+  const [missingCourseModal, setMissingCourseModal] = useState(false);
+  const [pendingGroupIdForCreate, setPendingGroupIdForCreate] = useState<number | null>(null);
+  const [courseModalMode, setCourseModalMode] = useState<"choice" | "edit">("choice");
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [missingCourseForm, setMissingCourseForm] = useState({
+    code: "",
+    title: "",
+    level: "100",
+    scope: "departmental" as "departmental" | "shared" | "general",
+    programmeIds: [] as string[],
+  });
+
+  const parseSessionYear = useCallback((session: string | null) => {
+    if (!session) return null;
+    const trimmed = session.trim();
+    const match = trimmed.match(/(\d{4})\s*\/\s*(\d{4})/);
+    if (match) return match[1];
+    const year = trimmed.match(/\b(\d{4})\b/);
+    return year ? year[1] : null;
+  }, []);
+
+  const getSignedUrl = useCallback(async (stagedPath: string): Promise<string | null> => {
+    if (signedUrlCacheRef.current[stagedPath]) return signedUrlCacheRef.current[stagedPath];
+    const res = await fetch("/api/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "bulk-file-url", stagedPath }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      signedUrlCacheRef.current[stagedPath] = data.url;
+      setSignedUrlCache((prev) => ({ ...prev, [stagedPath]: data.url }));
+      return data.url;
+    }
+    return null;
+  }, []);
+
+  const openMissingCourseModal = useCallback((groupId: number, mode: "choice" | "edit" = "choice") => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const fallbackProgrammeId = programmes[0]?.id || "";
+    setMissingCourseForm({
+      code: group.proposedMetadata.courseCode || "",
+      title: group.proposedMetadata.courseTitle || group.proposedMetadata.courseCode || "",
+      level: group.proposedMetadata.level?.toString() || "100",
+      scope: "departmental",
+      programmeIds: group.matchedCourseId ? [group.matchedCourseId] : fallbackProgrammeId ? [fallbackProgrammeId] : [],
+    });
+    setPendingGroupIdForCreate(groupId);
+    setCourseModalMode(mode);
+    setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, createCoursePrompted: true } : g)));
+    setMissingCourseModal(true);
+  }, [groups, programmes]);
+
+  const closeMissingCourseModal = useCallback(() => {
+    setMissingCourseModal(false);
+    setPendingGroupIdForCreate(null);
+    setCourseModalMode("choice");
+  }, []);
+
+  const handleModalCreate = async () => {
+    if (!pendingGroupIdForCreate) return;
+    if (!missingCourseForm.code.trim() || !missingCourseForm.title.trim()) {
+      toast.warning("Course code and title are required");
+      return;
+    }
+    if (missingCourseForm.scope !== "general" && missingCourseForm.programmeIds.length === 0) {
+      toast.warning("Select at least one programme");
+      return;
+    }
+    setCreatingCourse(true);
+    try {
+      const res = await fetch("/api/admin?action=create-course", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: missingCourseForm.code.trim(),
+          title: missingCourseForm.title.trim(),
+          level: parseInt(missingCourseForm.level),
+          scope: missingCourseForm.scope,
+          programmeIds: missingCourseForm.programmeIds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create course");
+      const newCourse = data.course;
+      setCourses((prev) => [...prev, newCourse].sort((a, b) => a.code.localeCompare(b.code)));
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.id === pendingGroupIdForCreate
+            ? {
+                ...g,
+                courseId: newCourse.id,
+                newCourse: {
+                  code: newCourse.code,
+                  title: newCourse.title,
+                  level: parseInt(missingCourseForm.level),
+                  scope: missingCourseForm.scope,
+                  programmeIds: missingCourseForm.programmeIds,
+                },
+                possibleMatches: [],
+                matchedCourseId: newCourse.id,
+                createCoursePrompted: true,
+              }
+            : g
+        )
+      );
+      closeMissingCourseModal();
+      toast.success(`Course "${newCourse.code}" created and selected`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to create course";
+      toast.error(msg);
+    } finally {
+      setCreatingCourse(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/admin?action=courses")
@@ -98,9 +208,6 @@ export function BulkUploadStaging() {
     fetch("/api/admin?action=programmes")
       .then((r) => r.json())
       .then((d) => { if (d.programmes) setProgrammes(d.programmes); });
-    fetch("/api/admin?action=faculties")
-      .then((r) => r.json())
-      .then((d) => { if (d.faculties) setFaculties(d.faculties); });
   }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,8 +239,9 @@ export function BulkUploadStaging() {
         matchedCourseId: g.matchedCourseId || "",
         possibleMatches: g.possibleMatches || [],
         courseId: g.matchedCourseId || "",
+        createCoursePrompted: false,
         newCourse: null,
-        year: currentYear,
+        year: parseSessionYear(g.proposedMetadata.session) || currentYear,
         semester: g.proposedMetadata.semester || "first",
         examType: g.proposedMetadata.examType || "examination",
       })));
@@ -145,6 +253,21 @@ export function BulkUploadStaging() {
     setExtracting(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  useEffect(() => {
+    if (extracting || missingCourseModal) return;
+    const nextMissing = groups.find(
+      (g) =>
+        !g.createCoursePrompted &&
+        !g.courseId &&
+        !g.newCourse &&
+        !!g.proposedMetadata.courseCode &&
+        g.possibleMatches.length === 0,
+    );
+    if (nextMissing) {
+      openMissingCourseModal(nextMissing.id, "choice");
+    }
+  }, [groups, extracting, missingCourseModal, openMissingCourseModal]);
 
   const handlePageDragStart = (groupId: number, pageIndex: number) => {
     setDraggedPage({ groupId, pageIndex });
@@ -221,42 +344,6 @@ export function BulkUploadStaging() {
     setGroups((prev) => prev.filter((g) => g.id !== groupId));
   };
 
-  const handleCreateCourseSubmit = async (groupId: number) => {
-    if (!newCourseForm.code.trim() || !newCourseForm.title.trim()) {
-      toast.warning("Course code and title are required");
-      return;
-    }
-    try {
-      const res = await fetch("/api/admin?action=create-course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: newCourseForm.code.trim(),
-          title: newCourseForm.title.trim(),
-          programme_id: newCourseForm.departmentIds[0] || "",
-          level: parseInt(newCourseForm.level),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create course");
-      const newCourse = data.course;
-      setCourses((prev) => [...prev, newCourse].sort((a, b) => a.code.localeCompare(b.code)));
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.id === groupId
-            ? { ...g, courseId: newCourse.id, newCourse: { ...newCourseForm, code: newCourse.code, title: newCourse.title, level: parseInt(newCourseForm.level) }, possibleMatches: [] }
-            : g
-        )
-      );
-      setCreatingCourseGroupId(null);
-      setNewCourseForm({ code: "", title: "", level: "100", scope: "departmental", departmentIds: [] });
-      toast.success(`Course "${newCourse.code}" created and selected`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create course";
-      toast.error(msg);
-    }
-  };
-
   const handleConfirm = async () => {
     if (groups.length === 0) {
       toast.warning("No groups to commit");
@@ -286,7 +373,7 @@ export function BulkUploadStaging() {
           title: g.newCourse.title,
           level: g.newCourse.level,
           scope: g.newCourse.scope,
-          departmentIds: g.newCourse.departmentIds,
+          departmentIds: g.newCourse.programmeIds,
         } : null,
         year: parseInt(g.year),
         semester: g.semester,
@@ -320,8 +407,6 @@ export function BulkUploadStaging() {
     }
     setSubmitting(false);
   };
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
   return (
     <div className="space-y-6">
@@ -441,19 +526,51 @@ export function BulkUploadStaging() {
                                 <span className="text-[10px]">PDF</span>
                               </div>
                             ) : (
-                              <img
-                                src={`${supabaseUrl}/storage/v1/object/public/pending/${page.stagedPath}`}
-                                alt={`Page ${pIdx + 1}`}
-                                className="h-full w-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = "none";
-                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                              <button
+                                onClick={() => {
+                                  getSignedUrl(page.stagedPath).then((url) => {
+                                    if (url) {
+                                      setPreviewPage({
+                                        src: url,
+                                        title: group.proposedMetadata.courseCode || `Group ${gIdx + 1}`,
+                                        subtitle: page.pageIndicator ? `${page.pageIndicator}` : page.textSnippet || `Page ${pIdx + 1}`,
+                                        groupLabel: `Group ${gIdx + 1} · Page ${pIdx + 1}`,
+                                      });
+                                    }
+                                  });
                                 }}
-                              />
+                                className="relative h-full w-full overflow-hidden rounded-lg bg-gray-100"
+                                title="Click to enlarge"
+                              >
+                                {signedUrlCache[page.stagedPath] ? (
+                                  <img
+                                    src={signedUrlCache[page.stagedPath]}
+                                    alt={`Page ${pIdx + 1}`}
+                                    className="h-full w-full object-cover"
+                                    onError={() => {
+                                      const el = document.getElementById(`thumb-fallback-${gIdx}-${pIdx}`);
+                                      if (el) el.classList.remove("hidden");
+                                      const img = document.getElementById(`thumb-img-${gIdx}-${pIdx}`);
+                                      if (img) img.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <svg className="h-5 w-5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                  </div>
+                                )}
+                                <div id={`thumb-fallback-${gIdx}-${pIdx}`} className="hidden absolute inset-0 bg-gray-200 flex items-center justify-center">
+                                  <ImageIcon className="h-6 w-6 text-gray-400" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/20 transition-opacity">
+                                  <Maximize2 className="h-5 w-5 text-white" />
+                                </div>
+                                <img id={`thumb-img-${gIdx}-${pIdx}`} src={signedUrlCache[page.stagedPath] || ""} alt="" className="hidden" />
+                              </button>
                             )}
-                            <div className="hidden absolute inset-0 bg-gray-200 flex items-center justify-center">
-                              <ImageIcon className="h-6 w-6 text-gray-400" />
-                            </div>
                           </div>
                           <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-[10px] font-bold text-white">
                             {pIdx + 1}
@@ -500,102 +617,23 @@ export function BulkUploadStaging() {
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Course</label>
-                      {creatingCourseGroupId === group.id ? (
-                        <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <input
-                            type="text"
-                            placeholder="Code (e.g. CSC 401)"
-                            value={newCourseForm.code}
-                            onChange={(e) => setNewCourseForm((f) => ({ ...f, code: e.target.value }))}
-                            className="block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Title"
-                            value={newCourseForm.title}
-                            onChange={(e) => setNewCourseForm((f) => ({ ...f, title: e.target.value }))}
-                            className="block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                          />
-                          <div className="flex gap-2">
-                            <select
-                              value={newCourseForm.level}
-                              onChange={(e) => setNewCourseForm((f) => ({ ...f, level: e.target.value }))}
-                              className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                            >
-                              {[100, 200, 300, 400, 500, 600, 700].map((l) => (
-                                <option key={l} value={l}>{l}</option>
-                              ))}
-                            </select>
-                            <select
-                              value={newCourseForm.scope}
-                              onChange={(e) => setNewCourseForm((f) => ({ ...f, scope: e.target.value as typeof newCourseForm.scope }))}
-                              className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                            >
-                              <option value="departmental">Dept.</option>
-                              <option value="shared">Shared</option>
-                              <option value="general">General</option>
-                            </select>
-                          </div>
-                          {(newCourseForm.scope === "shared" || newCourseForm.scope === "general") && (
-                            <select
-                              multiple
-                              value={newCourseForm.departmentIds}
-                              onChange={(e) => setNewCourseForm((f) => ({
-                                ...f,
-                                departmentIds: Array.from(e.target.selectedOptions, (o) => o.value),
-                              }))}
-                              className="block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                            >
-                              {programmes.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                              ))}
-                            </select>
-                          )}
-                          {newCourseForm.scope === "departmental" && (
-                            <select
-                              value={newCourseForm.departmentIds[0] || ""}
-                              onChange={(e) => setNewCourseForm((f) => ({ ...f, departmentIds: [e.target.value] }))}
-                              className="block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                            >
-                              <option value="">Select programme</option>
-                              {programmes.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                              ))}
-                            </select>
-                          )}
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleCreateCourseSubmit(group.id)}
-                              className="flex-1 rounded-lg bg-primary-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-                            >
-                              Create
-                            </button>
-                            <button
-                              onClick={() => setCreatingCourseGroupId(null)}
-                              className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1">
-                          <select
-                            value={group.courseId}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "__create_new__") {
-                                setCreatingCourseGroupId(group.id);
-                              } else {
-                                setGroups((prev) =>
-                                  prev.map((g) =>
-                                    g.id === group.id
-                                      ? { ...g, courseId: val, newCourse: null, possibleMatches: [] }
-                                      : g
-                                  )
-                                );
-                              }
-                            }}
+                      <div className="flex gap-1">
+                              <select
+                                value={group.courseId}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === "__create_new__") {
+                                    openMissingCourseModal(group.id);
+                                  } else {
+                                    setGroups((prev) =>
+                                      prev.map((g) =>
+                                        g.id === group.id
+                                          ? { ...g, courseId: val, newCourse: null, possibleMatches: [], createCoursePrompted: g.createCoursePrompted || false }
+                                          : g
+                                      )
+                                    );
+                                  }
+                                }}
                             className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
                           >
                             <option value="">Select course...</option>
@@ -612,8 +650,7 @@ export function BulkUploadStaging() {
                             <option value="__create_new__">+ Create new course...</option>
                           </select>
                         </div>
-                      )}
-                    </div>
+                      </div>
 
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Session</label>
@@ -682,8 +719,179 @@ export function BulkUploadStaging() {
               </button>
             </div>
           </div>
+          {previewPage && (
+            <Dialog open={!!previewPage} onOpenChange={(open) => !open && setPreviewPage(null)}>
+              <DialogContent className="relative max-w-[95vw] overflow-hidden border-gray-200 p-0">
+                <DialogHeader className="border-b border-gray-200 px-5 py-4">
+                  <DialogTitle className="flex items-center justify-between gap-3 text-left">
+                    <span>{previewPage?.title}</span>
+                    <span className="text-xs font-normal text-gray-500">{previewPage?.groupLabel}</span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="bg-black/90 p-3">
+                    {previewPage && <ImageViewer src={previewPage.src} alt={previewPage.title} />}
+                  </div>
+                  <div className="border-t border-gray-200 bg-white p-4 lg:border-l lg:border-t-0">
+                    <p className="text-sm font-medium text-gray-900">Preview details</p>
+                    <p className="mt-2 text-sm text-gray-600">{previewPage?.subtitle}</p>
+                    <p className="mt-4 text-xs uppercase tracking-wide text-gray-400">Tip</p>
+                    <p className="mt-1 text-sm text-gray-600">Use zoom and rotate controls to inspect bent or skewed pages before confirming.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPreviewPage(null)}
+                  className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-gray-700 shadow-sm hover:bg-white"
+                  aria-label="Close preview"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </DialogContent>
+            </Dialog>
+          )}
         </>
       )}
+
+      <Dialog open={missingCourseModal} onOpenChange={(open) => !open && closeMissingCourseModal()}>
+        <DialogContent className="max-w-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Course not found</DialogTitle>
+          </DialogHeader>
+          {pendingGroupIdForCreate !== null && (() => {
+            const group = groups.find((g) => g.id === pendingGroupIdForCreate);
+            if (!group) return null;
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  We could not find a matching course for <span className="font-semibold text-gray-900">{group.proposedMetadata.courseCode || "this group"}</span>.
+                </p>
+                {courseModalMode === "choice" ? (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleModalCreate()}
+                      disabled={creatingCourse}
+                      className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      Yes, create it
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeMissingCourseModal}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      No, skip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCourseModalMode("edit")}
+                      className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100"
+                    >
+                      Edit details
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Course code</label>
+                        <input
+                          value={missingCourseForm.code}
+                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, code: e.target.value }))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Title</label>
+                        <input
+                          value={missingCourseForm.title}
+                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, title: e.target.value }))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Level</label>
+                        <select
+                          value={missingCourseForm.level}
+                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, level: e.target.value }))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                        >
+                          {[100, 200, 300, 400, 500, 600, 700].map((level) => (
+                            <option key={level} value={level}>{level}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Scope</label>
+                        <select
+                          value={missingCourseForm.scope}
+                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, scope: e.target.value as "departmental" | "shared" | "general" }))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                        >
+                          <option value="departmental">Programme</option>
+                          <option value="shared">Shared</option>
+                          <option value="general">General</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">Programme(s)</label>
+                      <select
+                        multiple
+                        value={missingCourseForm.programmeIds}
+                        onChange={(e) => setMissingCourseForm((prev) => ({
+                          ...prev,
+                          programmeIds: Array.from(e.currentTarget.selectedOptions)
+                            .map((opt) => opt.value)
+                            .includes("__stand_alone__")
+                            ? []
+                            : Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value),
+                          scope: Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value).includes("__stand_alone__")
+                            ? "general"
+                            : prev.scope,
+                        }))}
+                        className="h-32 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                      >
+                        <option value="__stand_alone__">Stand-alone (general course)</option>
+                        {programmes.map((programme) => (
+                          <option key={programme.id} value={programme.id}>
+                            {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes, or choose stand-alone for a general course.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={handleModalCreate}
+                        disabled={creatingCourse}
+                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+                      >
+                        {creatingCourse ? "Creating..." : "Create course"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCourseModalMode("choice")}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeMissingCourseModal}
+                        className="rounded-lg border border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

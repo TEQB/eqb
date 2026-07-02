@@ -21,7 +21,7 @@ interface Question {
     title: string;
     level: number;
     department_id: string;
-    departments: { name: string };
+    programme: { name: string };
   } | null;
   profiles: { full_name: string; auth_user_id?: string } | null;
 }
@@ -251,7 +251,7 @@ export default function AdminQuestionsPage({
                     {q.courses?.title || "-"}
                   </td>
                   <td className="px-5 py-4 text-gray-700">
-                    {q.courses?.departments?.name || "-"}
+                    {q.courses?.programme?.name || "-"}
                   </td>
                   <td className="px-5 py-4 text-gray-700">
                     {q.courses?.level || "-"}

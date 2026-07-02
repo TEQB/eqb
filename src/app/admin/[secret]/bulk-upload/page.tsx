@@ -1,7 +1,7 @@
 import { BulkUploadStaging } from "@/components/admin/BulkUploadStaging";
 
 export default function AdminBulkUploadPage({
-  params,
+  params: _params,
 }: {
   params: { secret: string };
 }) {

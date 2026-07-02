@@ -20,7 +20,7 @@ export default async function CoursePage({
 
   const { data: rawCourse } = await supabase
     .from("courses")
-    .select("*, department:department_id(name)")
+    .select("*, programme:department_id(name)")
     .eq("id", params.id)
     .single();
   const course = rawCourse as unknown as {
@@ -30,7 +30,7 @@ export default async function CoursePage({
     level: number;
     scope: string;
     department_id: string;
-    department: { name: string } | null;
+    programme: { name: string } | null;
   } | null;
 
   if (!course) {
@@ -54,8 +54,8 @@ export default async function CoursePage({
   const { data: questions } = await questionsQuery;
 
   const programmeName =
-    typeof course.department === "object" && course.department !== null
-      ? (course.department as { name: string }).name
+    typeof course.programme === "object" && course.programme !== null
+      ? (course.programme as { name: string }).name
       : "";
 
   return (

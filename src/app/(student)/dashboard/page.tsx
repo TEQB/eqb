@@ -41,7 +41,7 @@ export default async function DashboardPage({
 
   const generalCourses = courseGroups.generalCourses.map(withCount) || [];
   const programmeCourses = courseGroups.programmeCourses.map(withCount) || [];
-  const levels = profile.department?.available_levels || [];
+  const levels = profile.programme?.available_levels || [];
 
   const selectedLevel = searchParams.level
     ? parseInt(searchParams.level)
@@ -54,7 +54,7 @@ export default async function DashboardPage({
       <div className="animate-fade-in-down flex flex-col gap-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-primary">Dashboard</h2>
-          <p className="mt-1 text-sm text-gray-500">{profile.department?.name}</p>
+          <p className="mt-1 text-sm text-gray-500">{profile.programme?.name}</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Link

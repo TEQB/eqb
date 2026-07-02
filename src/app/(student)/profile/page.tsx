@@ -69,7 +69,7 @@ export default async function ProfilePage() {
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">Programme</dt>
-            <dd className="mt-1 text-sm text-gray-900">{profile.department?.name || "—"}</dd>
+            <dd className="mt-1 text-sm text-gray-900">{profile.programme?.name || "—"}</dd>
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">Current level</dt>

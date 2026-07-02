@@ -188,9 +188,15 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   async function handleCreateCourse(e: React.FormEvent) {
     e.preventDefault();
     setNewCourseError("");
-    if (!newCode.trim() || !newTitle.trim() || !newProgrammeId) {
+    const isStandAlone = newProgrammeId === "__stand_alone__";
+    if (!newCode.trim() || !newTitle.trim()) {
       setNewCourseError("All fields are required");
       toast.warning("All fields are required");
+      return;
+    }
+    if (!isStandAlone && !newProgrammeId) {
+      setNewCourseError("Select a programme or stand-alone");
+      toast.warning("Select a programme or stand-alone");
       return;
     }
     setCreatingCourse(true);
@@ -201,12 +207,17 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
         body: JSON.stringify({
           code: newCode.trim(),
           title: newTitle.trim(),
-          programme_id: newProgrammeId,
+          programme_id: isStandAlone ? null : newProgrammeId,
+          programmeIds: isStandAlone ? [] : [newProgrammeId],
+          standAlone: isStandAlone,
+          scope: isStandAlone ? "general" : scope,
           level: parseInt(newLevel),
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create course");
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to create course (${res.status})`);
+      }
       const newCourse = data.course;
       setCourses((prev) => [...prev, newCourse].sort((a, b) => a.code.localeCompare(b.code)));
       setCourseId(newCourse.id);
@@ -245,6 +256,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
             <select value={newProgrammeId} onChange={(e) => setNewProgrammeId(e.target.value)}
               className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
               <option value="">Select programme</option>
+              <option value="__stand_alone__">Stand-alone (general course)</option>
               {programmes.map((p) => (
                 <option key={p.id} value={p.id}>{p.name} ({p.faculty_name})</option>
               ))}
@@ -295,7 +307,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
           setSelectedProgrammeId("");
         }}
           className="mt-1 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
-          <option value="departmental">Departmental (only my programme)</option>
+          <option value="departmental">Programme (only my programme)</option>
           <option value="shared">Shared (visible to other programmes in my faculty)</option>
           <option value="general">General (all students)</option>
         </select>

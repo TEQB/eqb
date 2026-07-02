@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { email, fullName, matricNumber, departmentId, currentLevel } = parsed.data;
+    const { email, fullName, matricNumber, programmeId, currentLevel } = parsed.data;
 
     const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
     if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
@@ -73,12 +73,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to store OTP" }, { status: 500 });
     }
 
-    if (fullName && matricNumber && departmentId && currentLevel) {
+    if (fullName && matricNumber && programmeId && currentLevel) {
       await service.from("pending_registrations").upsert({
         email,
         full_name: fullName,
         matric_number: matricNumber,
-        department_id: departmentId,
+        department_id: programmeId,
         current_level: currentLevel,
       });
     }

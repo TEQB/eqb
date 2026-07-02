@@ -11,7 +11,7 @@ import { ObligationBanner } from "@/components/upload/ObligationBanner";
 interface StudentProfile {
   id: string;
   fullName: string;
-  departmentId: string;
+  programmeId: string;
   currentLevel: number;
   isLocked: boolean;
   daysRemaining: number;

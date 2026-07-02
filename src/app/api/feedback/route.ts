@@ -52,13 +52,13 @@ export async function POST(req: Request) {
     const service = createServiceClient();
     const { data: rawProfile } = await service
       .from("profiles" as never)
-      .select("id, full_name, department:department_id(name)")
+      .select("id, full_name, programme:department_id(name)")
       .eq("auth_user_id", user.id)
       .maybeSingle();
     const profile = rawProfile as unknown as {
       id: string;
       full_name: string;
-      department: { name: string } | null;
+      programme: { name: string } | null;
     } | null;
 
     if (!profile) {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
       const [to, ...bcc] = adminEmails;
       const { subject, html } = feedbackTemplate(
         profile.full_name,
-        profile.department?.name || "Unknown",
+        profile.programme?.name || "Unknown",
         message,
       );
 

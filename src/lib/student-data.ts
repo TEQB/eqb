@@ -16,7 +16,7 @@ export interface StudentProfile {
   auth_user_id: string;
   full_name: string;
   matric_number: string;
-  programme_id: string;
+  department_id: string;
   current_level: number;
   role: string;
   last_upload_at: string | null;
@@ -55,18 +55,18 @@ export async function loadStudentProfile(
 
 export async function loadStudentCourseGroups(
   supabase: Client,
-  departmentId: string,
+  programmeId: string,
 ): Promise<StudentCourseGroups> {
   const [rawOwnCourses, rawDeptLinks] = await Promise.all([
     supabase
       .from("courses")
       .select("id, code, title, level, scope, department_id")
-      .or(`scope.eq.general,department_id.eq.${departmentId}`)
+      .or(`scope.eq.general,department_id.eq.${programmeId}`)
       .order("level"),
     supabase
       .from("department_courses")
       .select("course_id, course:course_id(id, code, title, level, scope, department_id)")
-      .eq("department_id", departmentId),
+      .eq("department_id", programmeId),
   ]);
 
   const ownCourses = rawOwnCourses.data as unknown as StudentCourse[] | null;
