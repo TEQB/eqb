@@ -123,8 +123,9 @@ const faqs = [
 
 export default function LandingPage() {
   return (
-    <SplashWrapper>
-    <div className="bg-background text-foreground">
+    <>
+      <SplashWrapper />
+      <div className="bg-background text-foreground">
       <LandingNavbar />
 
       <main>
@@ -438,7 +439,7 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-    </div>
-    </SplashWrapper>
+      </div>
+    </>
   );
 }

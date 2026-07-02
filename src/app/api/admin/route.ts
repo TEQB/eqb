@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
       }
 
       case "courses": {
-        const { data: list } = await service.from("courses").select("id, code, title, level").order("code");
+        const { data: list } = await service.from("courses").select("id, code, title, level, scope, department_id").order("code");
         return NextResponse.json({ courses: list ?? [] });
       }
 
@@ -749,9 +749,6 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const file_url = formData.get("file_url") as string;
         const file_type = formData.get("file_type") as string;
         const question_id = formData.get("question_id") as string;
-        const scope = formData.get("scope") as string || "departmental";
-        const department_id = formData.get("department_id") as string || null;
-        const faculty_id = formData.get("faculty_id") as string || null;
         if (!course_id || !year || !semester || !file_url || !file_type || !question_id) {
           return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
@@ -765,11 +762,6 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           return NextResponse.json({ error: "Profile not found" }, { status: 404 });
         }
 
-        let scopeDeptId: string | null = null;
-        if (scope === "departmental" && department_id) {
-          scopeDeptId = department_id;
-        }
-
         const { error: insertErr } = await service.from("past_questions").insert({
           id: question_id,
           course_id,
@@ -781,8 +773,6 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           semester,
           exam_type: exam_type || "examination",
           status: "published",
-          scope,
-          department_id: scopeDeptId,
         } as never);
         if (insertErr) {
           logger.error({ event: "admin.upload_insert_failed", message: "Failed to insert question", userId: user.id, metadata: { error: insertErr.message } });

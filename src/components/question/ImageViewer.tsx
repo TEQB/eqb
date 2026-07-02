@@ -1,11 +1,195 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Expand,
+  RotateCcw,
+  RotateCw,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface ImageViewerProps {
   src: string;
   alt: string;
+}
+
+type ToolbarTone = "light" | "dark";
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 5;
+const SCALE_STEP = 0.25;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function controlButtonClass(tone: ToolbarTone) {
+  return tone === "dark"
+    ? "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
+    : "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100";
+}
+
+function iconClass(tone: ToolbarTone) {
+  return tone === "dark" ? "h-4 w-4 text-white" : "h-4 w-4 text-gray-600";
+}
+
+function Divider({ tone }: { tone: ToolbarTone }) {
+  return <div className={tone === "dark" ? "h-5 w-px bg-white/15" : "h-5 w-px bg-gray-200"} />;
+}
+
+function Toolbar({
+  tone,
+  scale,
+  zoomInput,
+  onZoomInputChange,
+  onZoomInputCommit,
+  onZoomOut,
+  onZoomIn,
+  onRotateLeft,
+  onRotateRight,
+  onReset,
+  onOpenFullscreen,
+  onCloseFullscreen,
+  showFullscreenButton,
+  showCloseButton,
+}: {
+  tone: ToolbarTone;
+  scale: number;
+  zoomInput: string;
+  onZoomInputChange: (value: string) => void;
+  onZoomInputCommit: () => void;
+  onZoomOut: () => void;
+  onZoomIn: () => void;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onReset: () => void;
+  onOpenFullscreen?: () => void;
+  onCloseFullscreen?: () => void;
+  showFullscreenButton?: boolean;
+  showCloseButton?: boolean;
+}) {
+  const isDark = tone === "dark";
+  const zoomTextClass = isDark
+    ? "w-16 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-center text-sm text-white outline-none ring-0 placeholder:text-white/30 focus:border-white/25"
+    : "w-16 rounded-md border border-gray-200 bg-white px-2 py-1 text-center text-sm text-gray-800 outline-none ring-0 placeholder:text-gray-400 focus:border-gray-300";
+
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-1.5 ${isDark ? "text-white" : "text-gray-600"}`}
+    >
+      {showCloseButton && onCloseFullscreen && (
+        <button
+          type="button"
+          onClick={onCloseFullscreen}
+          className={controlButtonClass(tone)}
+          title="Back"
+          aria-label="Back"
+        >
+          <ArrowLeft className={iconClass(tone)} />
+          <span>Back</span>
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onZoomOut}
+        className={controlButtonClass(tone)}
+        title="Zoom out"
+        aria-label="Zoom out"
+      >
+        <ZoomOut className={iconClass(tone)} />
+        <span className="hidden sm:inline">Zoom out</span>
+      </button>
+
+      <label className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm ${isDark ? "text-white/85" : "text-gray-600"}`}>
+        <span className="sr-only">Zoom percentage</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={25}
+          max={500}
+          step={1}
+          value={zoomInput}
+          onChange={(e) => onZoomInputChange(e.target.value)}
+          onBlur={onZoomInputCommit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onZoomInputCommit();
+            }
+          }}
+          className={zoomTextClass}
+          aria-label="Zoom percentage"
+        />
+        <span>%</span>
+      </label>
+
+      <button
+        type="button"
+        onClick={onZoomIn}
+        className={controlButtonClass(tone)}
+        title="Zoom in"
+        aria-label="Zoom in"
+      >
+        <ZoomIn className={iconClass(tone)} />
+        <span className="hidden sm:inline">Zoom in</span>
+      </button>
+
+      <Divider tone={tone} />
+
+      <button
+        type="button"
+        onClick={onRotateLeft}
+        className={controlButtonClass(tone)}
+        title="Rotate counterclockwise"
+        aria-label="Rotate counterclockwise"
+      >
+        <RotateCcw className={iconClass(tone)} />
+        <span className="hidden sm:inline">Rotate left</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onRotateRight}
+        className={controlButtonClass(tone)}
+        title="Rotate clockwise"
+        aria-label="Rotate clockwise"
+      >
+        <RotateCw className={iconClass(tone)} />
+        <span className="hidden sm:inline">Rotate right</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onReset}
+        className={controlButtonClass(tone)}
+        title="Reset view"
+        aria-label="Reset view"
+      >
+        <span className="text-base leading-none">↺</span>
+        <span className="hidden sm:inline">Reset</span>
+      </button>
+
+      {showFullscreenButton && onOpenFullscreen && (
+        <>
+          <Divider tone={tone} />
+          <button
+            type="button"
+            onClick={onOpenFullscreen}
+            className={controlButtonClass(tone)}
+            title="Open full screen"
+            aria-label="Open full screen"
+          >
+            <Expand className={iconClass(tone)} />
+            <span className="hidden sm:inline">Full screen</span>
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function ImageViewer({ src, alt }: ImageViewerProps) {
@@ -14,7 +198,26 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   const [rotation, setRotation] = useState(0);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [zoomInput, setZoomInput] = useState("100");
+  const dragState = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    moved: false,
+  });
+
+  useEffect(() => {
+    setZoomInput(String(Math.round(scale * 100)));
+  }, [scale]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => setIsTouchDevice(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
 
   const resetView = useCallback(() => {
     setScale(1);
@@ -22,19 +225,21 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
     setPosition({ x: 0, y: 0 });
   }, []);
 
-  const zoomIn = useCallback(() => {
-    setScale((prev) => Math.min(prev + 0.25, 5));
+  const setScaleAndClamp = useCallback((nextScale: number) => {
+    const clamped = clamp(nextScale, MIN_SCALE, MAX_SCALE);
+    setScale(clamped);
+    if (clamped <= 1) {
+      setPosition({ x: 0, y: 0 });
+    }
   }, []);
 
+  const zoomIn = useCallback(() => {
+    setScaleAndClamp(scale + SCALE_STEP);
+  }, [scale, setScaleAndClamp]);
+
   const zoomOut = useCallback(() => {
-    setScale((prev) => {
-      const newScale = Math.max(prev - 0.25, 0.25);
-      if (newScale <= 1) {
-        setPosition({ x: 0, y: 0 });
-      }
-      return newScale;
-    });
-  }, []);
+    setScaleAndClamp(scale - SCALE_STEP);
+  }, [scale, setScaleAndClamp]);
 
   const rotateLeft = useCallback(() => {
     setRotation((prev) => prev - 90);
@@ -44,42 +249,66 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
     setRotation((prev) => prev + 90);
   }, []);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (scale > 1) {
-      setIsDragging(true);
-      dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+  const commitZoomInput = useCallback(() => {
+    const parsed = Number.parseInt(zoomInput, 10);
+    if (Number.isNaN(parsed)) {
+      setZoomInput(String(Math.round(scale * 100)));
+      return;
     }
-  }, [scale, position]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isDragging && scale > 1) {
-      setPosition({
-        x: e.clientX - dragStart.current.x,
-        y: e.clientY - dragStart.current.y,
-      });
+    const nextScale = clamp(parsed / 100, MIN_SCALE, MAX_SCALE);
+    setScale(nextScale);
+    if (nextScale <= 1) {
+      setPosition({ x: 0, y: 0 });
     }
-  }, [isDragging, scale]);
+  }, [scale, zoomInput]);
 
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (scale <= 1) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    dragState.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX - position.x,
+      startY: e.clientY - position.y,
+      moved: false,
+    };
+    setIsDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [position.x, position.y, scale]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (!isDragging || dragState.current.pointerId !== e.pointerId || scale <= 1) return;
+
+    const nextX = e.clientX - dragState.current.startX;
+    const nextY = e.clientY - dragState.current.startY;
+    if (Math.abs(nextX - position.x) > 2 || Math.abs(nextY - position.y) > 2) {
+      dragState.current.moved = true;
+    }
+
+    setPosition({ x: nextX, y: nextY });
+  }, [isDragging, position.x, position.y, scale]);
+
+  const endPointerDrag = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (dragState.current.pointerId === e.pointerId) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignore pointer capture release errors.
+      }
+      setIsDragging(false);
+    }
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLElement>) => {
     e.preventDefault();
     if (e.deltaY < 0) {
-      setScale((prev) => Math.min(prev + 0.1, 5));
+      setScaleAndClamp(scale + 0.1);
     } else {
-      setScale((prev) => {
-        const newScale = Math.max(prev - 0.1, 0.25);
-        if (newScale <= 1) {
-          setPosition({ x: 0, y: 0 });
-        }
-        return newScale;
-      });
+      setScaleAndClamp(scale - 0.1);
     }
-  }, []);
+  }, [scale, setScaleAndClamp]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key === "+" || (e.ctrlKey && e.key === "=")) {
       e.preventDefault();
       zoomIn();
@@ -96,188 +325,144 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
       e.preventDefault();
       resetView();
     }
-  }, [zoomIn, zoomOut, rotateLeft, rotateRight, resetView]);
+  }, [rotateLeft, rotateRight, resetView, zoomIn, zoomOut]);
 
-  return (
-    <>
-      <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
-          <p className="text-sm font-medium text-gray-600 flex items-center gap-2">
-            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            {alt}
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={zoomOut}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-              title="Zoom out"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6" />
-              </svg>
-            </button>
-            <span className="text-xs text-gray-500 w-12 text-center">{Math.round(scale * 100)}%</span>
-            <button
-              onClick={zoomIn}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-              title="Zoom in"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-              </svg>
-            </button>
-            <div className="w-px h-4 bg-gray-200 mx-1" />
-            <button
-              onClick={rotateLeft}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-              title="Rotate left"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12a9.5 9.5 0 11-18.9-4.5 9.5 9.5 0 0117.4 3.1L21 12m-1.5-5.5l4 4m-4 0l4-4" />
-              </svg>
-            </button>
-            <button
-              onClick={rotateRight}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-              title="Rotate right"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a9.5 9.5 0 1018.9-4.5 9.5 9.5 0 01-17.4 3.1L3 12m1.5 5.5l4-4m-4 0l4 4" />
-              </svg>
-            </button>
-            {(scale !== 1 || rotation !== 0) && (
-              <>
-                <div className="w-px h-4 bg-gray-200 mx-1" />
-                <button
-                  onClick={resetView}
-                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-                  title="Reset view"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                  </svg>
-                </button>
-              </>
-            )}
-            <div className="w-px h-4 bg-gray-200 mx-1" />
-            <button
-              onClick={() => setIsOpen(true)}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-              title="View fullscreen"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m4.5 0v4.5m0-4.5h-4.5M3.75 13.5v4.5m0-4.5h4.5m4.5 0v4.5m0-4.5h-4.5M16.5 3.75V8.25m0 0H12m4.5 0h4.5m-4.5 4.5v4.5m0-4.5h-4.5M16.5 13.5H12m4.5 0h4.5m-4.5 4.5v4.5m0-4.5h-4.5" />
-              </svg>
-            </button>
-          </div>
+  const handleImageClick = useCallback(() => {
+    if (dragState.current.moved) {
+      dragState.current.moved = false;
+      return;
+    }
+
+    if (isTouchDevice) {
+      setIsOpen(true);
+    }
+  }, [isTouchDevice]);
+
+  const viewerStageStyle = {
+    transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+  } as const;
+
+  const imageStyle = {
+    transform: `scale(${scale}) rotate(${rotation}deg)`,
+    transformOrigin: "center center",
+    transition: isDragging ? "none" : "transform 0.2s ease-out",
+  } as const;
+
+  const renderStage = (fullScreen: boolean) => (
+    <div
+      className={`flex items-center justify-center ${
+        fullScreen ? "min-h-[calc(100dvh-7rem)] flex-1 bg-black/95 p-4" : "overflow-hidden bg-white p-3 sm:p-4"
+      }`}
+    >
+      <div
+        className={`relative flex items-center justify-center ${
+          fullScreen ? "w-full h-full" : "w-full"
+        }`}
+        style={viewerStageStyle}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className={`select-none ${fullScreen ? "max-h-[calc(100dvh-7rem)] max-w-full" : "w-full h-auto"}`}
+          style={imageStyle}
+          draggable={false}
+        />
+      </div>
+    </div>
+  );
+
+  const renderInlineViewer = () => (
+    <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white">
+      <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium text-gray-600 flex items-center gap-2">
+          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+          </svg>
+          {alt}
+        </p>
+        <Toolbar
+          tone="light"
+          scale={scale}
+          zoomInput={zoomInput}
+          onZoomInputChange={setZoomInput}
+          onZoomInputCommit={commitZoomInput}
+          onZoomOut={zoomOut}
+          onZoomIn={zoomIn}
+          onRotateLeft={rotateLeft}
+          onRotateRight={rotateRight}
+          onReset={resetView}
+          onOpenFullscreen={() => setIsOpen(true)}
+          showFullscreenButton
+          showCloseButton={false}
+        />
+      </div>
+
+      {isTouchDevice && (
+        <div className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 sm:hidden">
+          Tap the image to open full screen, then drag to pan after zooming.
         </div>
-        <div
-          className="overflow-hidden cursor-grab active:cursor-grabbing"
-          tabIndex={0}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-          onKeyDown={handleKeyDown}
-        >
+      )}
+
+      <div
+        className={`overflow-hidden ${
+          scale > 1 ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-zoom-in"
+        }`}
+        tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endPointerDrag}
+        onPointerCancel={endPointerDrag}
+        onWheel={handleWheel}
+        onKeyDown={handleKeyDown}
+        onClick={handleImageClick}
+        role="button"
+        aria-label="Open image viewer"
+      >
+        <div className="flex items-center justify-center p-3 sm:p-4" style={viewerStageStyle}>
           <img
             src={src}
             alt={alt}
-            className="w-full h-auto"
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
-              transformOrigin: 'center center',
-              transition: isDragging ? 'none' : 'transform 0.2s ease-out',
-            }}
+            className="w-full h-auto select-none"
+            style={imageStyle}
             draggable={false}
           />
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      {renderInlineViewer()}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden bg-black/90 border-gray-800">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-black/50">
-            <p className="text-sm font-medium text-white">{alt}</p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={zoomOut}
-                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
-                title="Zoom out"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6" />
-                </svg>
-              </button>
-              <span className="text-xs text-gray-400 w-12 text-center">{Math.round(scale * 100)}%</span>
-              <button
-                onClick={zoomIn}
-                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
-                title="Zoom in"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-                </svg>
-              </button>
-              <div className="w-px h-4 bg-gray-700 mx-1" />
-              <button
-                onClick={rotateLeft}
-                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
-                title="Rotate left"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12a9.5 9.5 0 11-18.9-4.5 9.5 9.5 0 0117.4 3.1L21 12m-1.5-5.5l4 4m-4 0l4-4" />
-                </svg>
-              </button>
-              <button
-                onClick={rotateRight}
-                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
-                title="Rotate right"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a9.5 9.5 0 1018.9-4.5 9.5 9.5 0 01-17.4 3.1L3 12m1.5 5.5l4-4m-4 0l4 4" />
-                </svg>
-              </button>
-              {(scale !== 1 || rotation !== 0) && (
-                <>
-                  <div className="w-px h-4 bg-gray-700 mx-1" />
-                  <button
-                    onClick={resetView}
-                    className="p-1.5 rounded-md hover:bg-gray-800 text-gray-300 transition-colors"
-                    title="Reset view"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                    </svg>
-                  </button>
-                </>
-              )}
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none border-0 bg-black p-0 text-white"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-black/95 px-4 py-3 sm:px-5">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-white">{alt}</p>
+              <p className="text-xs text-white/60">Drag to pan after zooming</p>
             </div>
-          </div>
-          <div
-            className="overflow-auto max-h-[calc(90vh-60px)] flex items-center justify-center cursor-grab active:cursor-grabbing"
-            tabIndex={0}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-            onKeyDown={handleKeyDown}
-          >
-            <img
-              src={src}
-              alt={alt}
-              className="max-w-full h-auto"
-              style={{
-                transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
-                transformOrigin: 'center center',
-                transition: isDragging ? 'none' : 'transform 0.2s ease-out',
-              }}
-              draggable={false}
+            <Toolbar
+              tone="dark"
+              scale={scale}
+              zoomInput={zoomInput}
+              onZoomInputChange={setZoomInput}
+              onZoomInputCommit={commitZoomInput}
+              onZoomOut={zoomOut}
+              onZoomIn={zoomIn}
+              onRotateLeft={rotateLeft}
+              onRotateRight={rotateRight}
+              onReset={resetView}
+              onCloseFullscreen={() => setIsOpen(false)}
+              showCloseButton
+              showFullscreenButton={false}
             />
           </div>
+
+          {renderStage(true)}
         </DialogContent>
       </Dialog>
     </>

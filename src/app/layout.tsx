@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Suspense } from "react";
 import "./globals.css";
 import { validateEnv } from "@/lib/env";
 import { Toaster } from "@/components/ui/toaster";
+import { ActivityTracker } from "@/components/activity/ActivityTracker";
 
 // Fail fast at build time if env vars are missing
 if (typeof window === "undefined") {
@@ -63,6 +65,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white">
+        <Suspense fallback={null}>
+          <ActivityTracker />
+        </Suspense>
         {children}
         <Toaster />
       </body>

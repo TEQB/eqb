@@ -69,6 +69,20 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   const firstPage = pages[0];
   const selectedCourse = courses.find((c) => c.id === courseId);
 
+  useEffect(() => {
+    if (!selectedCourse) return;
+    if (selectedCourse.scope === "general") {
+      setScope("general");
+      setSelectedFacultyId("");
+      setSelectedProgrammeId("");
+    } else if (selectedCourse.scope === "shared") {
+      setScope("shared");
+      setSelectedProgrammeId("");
+    } else {
+      setScope("departmental");
+    }
+  }, [selectedCourse]);
+
   const handlePageSelect = (index: number, file: File | null) => {
     setPages((prev) => {
       const updated = [...prev];

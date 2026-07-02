@@ -15,6 +15,35 @@ type LogEvent = {
 
 const PREFIX = "[EQB]";
 
+const persistedEventKeys = new Set<string>();
+
+async function persistServerLog(level: LogLevel, e: LogEvent) {
+  if (typeof window !== "undefined") return;
+  const cacheKey = `${level}:${e.event}:${e.message}:${e.userId ?? ""}:${e.ip ?? ""}:${e.path ?? ""}`;
+  if (persistedEventKeys.has(cacheKey)) return;
+  persistedEventKeys.add(cacheKey);
+
+  try {
+    const { insertLog } = await import("./db-logger");
+    await insertLog({
+      event: e.event,
+      message: e.message,
+      level,
+      ip: e.ip,
+      userId: e.userId,
+      userEmail: e.email,
+      path: e.path,
+      method: e.method,
+      durationMs: e.durationMs,
+      errorMessage: e.error,
+      metadata: e.metadata,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[EQB] Failed to persist log:", msg);
+  }
+}
+
 function write(level: LogLevel, e: LogEvent) {
   const entry = {
     t: new Date().toISOString(),
@@ -34,6 +63,7 @@ function write(level: LogLevel, e: LogEvent) {
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+  void persistServerLog(level, e);
 }
 
 export const logger = {
