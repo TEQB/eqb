@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminMobileSidebar } from "@/components/admin/AdminMobileSidebar";
 import { createClient } from "@/lib/supabase/client";
@@ -16,6 +16,7 @@ export function AdminLayoutClient({
   secret: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -42,11 +43,19 @@ export function AdminLayoutClient({
     check();
   }, []);
 
+  const isAuthPage = pathname?.endsWith("/login") || pathname?.endsWith("/register");
+  const isPublicAdminPage = isAuthPage || pathname?.split("/").filter(Boolean).length === 2;
+
   useEffect(() => {
+    if (isPublicAdminPage) return;
     if (isAuthed === false) {
       router.replace(`/admin/${secret}/login`);
     }
-  }, [isAuthed, router, secret]);
+  }, [isAuthed, isPublicAdminPage, router, secret]);
+
+  if (isPublicAdminPage) {
+    return <>{children}</>;
+  }
 
   if (isAuthed === null) {
     return (
