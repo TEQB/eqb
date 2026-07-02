@@ -37,12 +37,17 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [newCode, setNewCode] = useState("");
   const [newTitle, setNewTitle] = useState("");
-  const [newProgrammeId, setNewProgrammeId] = useState("");
   const [newLevel, setNewLevel] = useState("100");
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [newCourseError, setNewCourseError] = useState("");
   const [creatingCourse, setCreatingCourse] = useState(false);
+
+  const [newScope, setNewScope] = useState<"departmental" | "shared" | "general">("departmental");
+  const [newShareMode, setNewShareMode] = useState<"faculty" | "programmes">("faculty");
+  const [newFacultyId, setNewFacultyId] = useState("");
+  const [newProgrammeIds, setNewProgrammeIds] = useState<string[]>([]);
+  const [newDepartmentProgrammeId, setNewDepartmentProgrammeId] = useState("");
 
   const [scope, setScope] = useState<"departmental" | "shared" | "general">("departmental");
   const [selectedFacultyId, setSelectedFacultyId] = useState("");
@@ -202,15 +207,27 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   async function handleCreateCourse(e: React.FormEvent) {
     e.preventDefault();
     setNewCourseError("");
-    const isStandAlone = newProgrammeId === "__stand_alone__";
     if (!newCode.trim() || !newTitle.trim()) {
       setNewCourseError("All fields are required");
       toast.warning("All fields are required");
       return;
     }
-    if (!isStandAlone && !newProgrammeId) {
-      setNewCourseError("Select a programme or stand-alone");
-      toast.warning("Select a programme or stand-alone");
+    const resolvedProgrammeIds =
+      newScope === "departmental"
+        ? [newDepartmentProgrammeId].filter(Boolean)
+        : newScope === "shared"
+          ? (newShareMode === "faculty"
+            ? programmes.filter((programme) => programme.faculty_id === newFacultyId).map((programme) => programme.id)
+            : newProgrammeIds)
+          : [];
+    if (newScope === "departmental" && resolvedProgrammeIds.length === 0) {
+      setNewCourseError("Select a programme for departmental scope");
+      toast.warning("Select a programme for departmental scope");
+      return;
+    }
+    if (newScope === "shared" && resolvedProgrammeIds.length === 0) {
+      setNewCourseError("Select at least one programme for shared scope");
+      toast.warning("Select at least one programme for shared scope");
       return;
     }
     setCreatingCourse(true);
@@ -221,10 +238,8 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
         body: JSON.stringify({
           code: newCode.trim(),
           title: newTitle.trim(),
-          programme_id: isStandAlone ? null : newProgrammeId,
-          programmeIds: isStandAlone ? [] : [newProgrammeId],
-          standAlone: isStandAlone,
-          scope: isStandAlone ? "general" : scope,
+          programmeIds: resolvedProgrammeIds,
+          scope: newScope,
           level: parseInt(newLevel),
         }),
       });
@@ -238,8 +253,12 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
       setShowAddCourse(false);
       setNewCode("");
       setNewTitle("");
-      setNewProgrammeId("");
       setNewLevel("100");
+      setNewScope("departmental");
+      setNewShareMode("faculty");
+      setNewFacultyId("");
+      setNewProgrammeIds([]);
+      setNewDepartmentProgrammeId("");
       toast.success("Course created");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error creating course";
@@ -267,14 +286,81 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
             <input type="text" placeholder="Course Name (e.g. Operating Systems)" value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100" />
-            <select value={newProgrammeId} onChange={(e) => setNewProgrammeId(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
-              <option value="">Select programme</option>
-              <option value="__stand_alone__">Stand-alone (general course)</option>
-              {programmes.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.faculty_name})</option>
-              ))}
+            <select
+              value={newScope}
+              onChange={(e) => {
+                const nextScope = e.target.value as "departmental" | "shared" | "general";
+                setNewScope(nextScope);
+                if (nextScope !== "shared") {
+                  setNewShareMode("faculty");
+                  setNewFacultyId("");
+                  setNewProgrammeIds([]);
+                }
+              }}
+              className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+            >
+              <option value="departmental">Programme</option>
+              <option value="shared">Shared</option>
+              <option value="general">General</option>
             </select>
+            {newScope === "departmental" && (
+              <select
+                value={newDepartmentProgrammeId}
+                onChange={(e) => setNewDepartmentProgrammeId(e.target.value)}
+                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+              >
+                <option value="">Select programme</option>
+                {programmes.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.faculty_name})</option>
+                ))}
+              </select>
+            )}
+            {newScope === "shared" && (
+              <>
+                <select
+                  value={newShareMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as "faculty" | "programmes";
+                    setNewShareMode(mode);
+                    setNewFacultyId("");
+                    setNewProgrammeIds([]);
+                  }}
+                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="faculty">Whole faculty</option>
+                  <option value="programmes">Specific programmes</option>
+                </select>
+                <select
+                  value={newFacultyId}
+                  onChange={(e) => {
+                    setNewFacultyId(e.target.value);
+                    setNewProgrammeIds([]);
+                  }}
+                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="">Select faculty</option>
+                  {faculties.map((faculty) => (
+                    <option key={faculty.id} value={faculty.id}>{faculty.name}</option>
+                  ))}
+                </select>
+                {newShareMode === "programmes" && (
+                  <select
+                    multiple
+                    value={newProgrammeIds}
+                    onChange={(e) => setNewProgrammeIds(Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value))}
+                    className="block h-32 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                  >
+                    {programmes
+                      .filter((programme) => !newFacultyId || programme.faculty_id === newFacultyId)
+                      .map((programme) => (
+                        <option key={programme.id} value={programme.id}>
+                          {programme.name} ({programme.faculty_name})
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </>
+            )}
             <select value={newLevel} onChange={(e) => setNewLevel(e.target.value)}
               className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
               {[100, 200, 300, 400, 500].map((l) => (

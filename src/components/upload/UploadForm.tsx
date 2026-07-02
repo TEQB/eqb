@@ -20,6 +20,19 @@ interface Course {
   scope: string;
 }
 
+interface Faculty {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface Programme {
+  id: string;
+  name: string;
+  faculty_id: string;
+  faculty_name: string;
+}
+
 type UploadState = "idle" | "uploading" | "reviewing" | "rejected";
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -30,10 +43,24 @@ const SCOPE_LABELS: Record<string, string> = {
 
 const MAX_PAGES = 6;
 
-export function UploadForm({ courses: initialCourses, preselectedCourseId }: { courses: Course[]; preselectedCourseId?: string | null }) {
+export function UploadForm({
+  courses: initialCourses,
+  preselectedCourseId,
+  faculties: initialFaculties = [],
+  programmes: initialProgrammes = [],
+  currentProgrammeId = "",
+}: {
+  courses: Course[];
+  preselectedCourseId?: string | null;
+  faculties?: Faculty[];
+  programmes?: Programme[];
+  currentProgrammeId?: string;
+}) {
   const supabase = createClient();
 
   const [courses, setCourses] = useState<Course[]>(initialCourses);
+  const [faculties, setFaculties] = useState<Faculty[]>(initialFaculties);
+  const [programmes, setProgrammes] = useState<Programme[]>(initialProgrammes);
   const [pages, setPages] = useState<(File | null)[]>([null]);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
@@ -44,6 +71,10 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
   const [newTitle, setNewTitle] = useState("");
   const [newLevel, setNewLevel] = useState("100");
   const [newScope, setNewScope] = useState<"departmental" | "shared" | "general">("departmental");
+  const [newSharedMode, setNewSharedMode] = useState<"faculty" | "programmes">("faculty");
+  const [newFacultyId, setNewFacultyId] = useState("");
+  const [newProgrammeIds, setNewProgrammeIds] = useState<string[]>([]);
+  const [newDepartmentProgrammeId, setNewDepartmentProgrammeId] = useState(currentProgrammeId);
   const [addingCourse, setAddingCourse] = useState(false);
 
   const {
@@ -68,18 +99,65 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
     }
   }, [preselectedCourseId, setValue]);
 
+  useEffect(() => {
+    setCourses(initialCourses);
+  }, [initialCourses]);
+
+  useEffect(() => {
+    if (initialFaculties.length > 0) setFaculties(initialFaculties);
+    if (initialProgrammes.length > 0) setProgrammes(initialProgrammes);
+  }, [initialFaculties, initialProgrammes]);
+
+  useEffect(() => {
+    if (faculties.length > 0 && programmes.length > 0) return;
+    let active = true;
+    async function loadLookupData() {
+      const [facultyRes, programmeRes] = await Promise.all([
+        fetch("/api/browse/faculties"),
+        fetch("/api/browse/programmes"),
+      ]);
+      const facultyData = await facultyRes.json();
+      const programmeData = await programmeRes.json();
+      if (!active) return;
+      if (facultyData.faculties) setFaculties(facultyData.faculties);
+      if (programmeData.programmes) setProgrammes(programmeData.programmes);
+    }
+    loadLookupData();
+    return () => {
+      active = false;
+    };
+  }, [faculties.length, programmes.length]);
+
   const selectedCourseId = watch("courseId");
   const selectedCourse = courses.find((c) => c.id === selectedCourseId);
 
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCode || !newTitle) return;
+    const resolvedProgrammeIds =
+      newScope === "departmental"
+        ? [newDepartmentProgrammeId || currentProgrammeId].filter(Boolean)
+        : newScope === "shared"
+          ? (newSharedMode === "faculty"
+            ? programmes.filter((programme) => programme.faculty_id === newFacultyId).map((programme) => programme.id)
+            : newProgrammeIds)
+          : [];
+    if (newScope === "departmental" && resolvedProgrammeIds.length === 0) {
+      setError("Select a programme for departmental scope");
+      toast.warning("Select a programme for departmental scope");
+      return;
+    }
+    if (newScope === "shared" && resolvedProgrammeIds.length === 0) {
+      setError("Select at least one programme for shared scope");
+      toast.warning("Select at least one programme for shared scope");
+      return;
+    }
     setAddingCourse(true);
     try {
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: newCode, title: newTitle, level: newLevel, scope: newScope }),
+        body: JSON.stringify({ code: newCode, title: newTitle, level: newLevel, scope: newScope, programmeIds: resolvedProgrammeIds }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -95,6 +173,10 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
       setNewTitle("");
       setNewLevel("100");
       setNewScope("departmental");
+      setNewSharedMode("faculty");
+      setNewFacultyId("");
+      setNewProgrammeIds([]);
+      setNewDepartmentProgrammeId(currentProgrammeId);
       toast.success("Course added");
     } catch {
       setError("Failed to add course");
@@ -497,18 +579,103 @@ export function UploadForm({ courses: initialCourses, preselectedCourseId }: { c
                 <option value="600">600 Level</option>
               </select>
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 block">Scope</label>
-              <select
-                value={newScope}
-                onChange={(e) => setNewScope(e.target.value as "departmental" | "shared" | "general")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-              >
-                <option value="departmental">Programme (only your programme)</option>
-                <option value="shared">Shared (visible to other programmes)</option>
-                <option value="general">General (all students)</option>
-              </select>
-            </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block">Scope</label>
+                <select
+                  value={newScope}
+                  onChange={(e) => {
+                    const nextScope = e.target.value as "departmental" | "shared" | "general";
+                    setNewScope(nextScope);
+                    if (nextScope !== "shared") {
+                      setNewSharedMode("faculty");
+                      setNewFacultyId("");
+                      setNewProgrammeIds([]);
+                    }
+                  }}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="departmental">Programme (only your programme)</option>
+                  <option value="shared">Shared (visible to selected programmes)</option>
+                  <option value="general">General (all students)</option>
+                </select>
+              </div>
+              {newScope === "departmental" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block">Programme</label>
+                  <select
+                    value={newDepartmentProgrammeId}
+                    onChange={(e) => setNewDepartmentProgrammeId(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                  >
+                    <option value="">Select programme</option>
+                    {programmes.map((programme) => (
+                      <option key={programme.id} value={programme.id}>
+                        {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {newScope === "shared" && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block">Share with</label>
+                    <select
+                      value={newSharedMode}
+                      onChange={(e) => {
+                        const mode = e.target.value as "faculty" | "programmes";
+                        setNewSharedMode(mode);
+                        setNewFacultyId("");
+                        setNewProgrammeIds([]);
+                      }}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                    >
+                      <option value="faculty">Whole faculty</option>
+                      <option value="programmes">Specific programmes</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block">Faculty</label>
+                    <select
+                      value={newFacultyId}
+                      onChange={(e) => {
+                        setNewFacultyId(e.target.value);
+                        setNewProgrammeIds([]);
+                      }}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                    >
+                      <option value="">Select faculty</option>
+                      {faculties.map((faculty) => (
+                        <option key={faculty.id} value={faculty.id}>
+                          {faculty.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {newSharedMode === "programmes" && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 block">Programmes</label>
+                      <select
+                        multiple
+                        value={newProgrammeIds}
+                        onChange={(e) =>
+                          setNewProgrammeIds(Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value))
+                        }
+                        className="mt-1 block h-32 w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                      >
+                        {programmes
+                          .filter((programme) => !newFacultyId || programme.faculty_id === newFacultyId)
+                          .map((programme) => (
+                            <option key={programme.id} value={programme.id}>
+                              {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
+                            </option>
+                          ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes.</p>
+                    </div>
+                  )}
+                </>
+              )}
             <div className="flex gap-2">
               <button
                 type="submit"

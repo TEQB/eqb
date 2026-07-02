@@ -29,6 +29,12 @@ export default async function UploadPage({
   if (!user) redirect("/login");
 
   const courses = await loadCourses();
+  const { data: rawProfile } = await supabase
+    .from("profiles")
+    .select("department_id")
+    .eq("auth_user_id", user.id)
+    .single();
+  const currentProgrammeId = (rawProfile as unknown as { department_id: string } | null)?.department_id || "";
   const preselectedCourseId = searchParams.courseId;
 
   return (
@@ -36,7 +42,7 @@ export default async function UploadPage({
       <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5">
         <h2 className="text-xl font-semibold text-primary">Upload Past Question</h2>
       </div>
-      <UploadForm courses={courses} preselectedCourseId={preselectedCourseId} />
+      <UploadForm courses={courses} preselectedCourseId={preselectedCourseId} currentProgrammeId={currentProgrammeId} />
     </div>
   );
 }

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { code, title, level, scope = "departmental" } = await req.json();
+    const { code, title, level, scope = "departmental", programmeIds = [] } = await req.json();
 
     if (!code || !title || !level) {
       return NextResponse.json({ error: "code, title, and level are required" }, { status: 400 });
@@ -28,14 +28,19 @@ export async function POST(req: NextRequest) {
     }
 
     const service = createServiceClient();
+    const selectedProgrammeIds = Array.isArray(programmeIds)
+      ? programmeIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+      : [];
+    const owningProgrammeId = selectedProgrammeIds[0] || profile.department_id;
+    const effectiveScope = scope === "shared" ? "shared" : scope === "general" ? "general" : "departmental";
     const { data: newCourse, error } = await service
       .from("courses")
       .insert({
         code: code.toUpperCase(),
         title,
         level: parseInt(level, 10),
-        department_id: profile.department_id,
-        scope,
+        department_id: effectiveScope === "departmental" ? owningProgrammeId : null,
+        scope: effectiveScope,
       } as never)
       .select("id, code, title, level, scope")
       .single();
@@ -50,7 +55,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to retrieve created course" }, { status: 500 });
     }
 
-    logger.info({ event: "courses.created", message: "Course created by student", userId: user.id, metadata: { code, title, scope } });
+    if ((effectiveScope === "shared" || effectiveScope === "general") && selectedProgrammeIds.length > 0) {
+      await service.from("department_courses").insert(
+        selectedProgrammeIds.map((department_id) => ({
+          department_id,
+          course_id: (newCourse as { id: string }).id,
+        })) as never,
+      );
+    }
+
+    logger.info({
+      event: "courses.created",
+      message: "Course created by student",
+      userId: user.id,
+      metadata: { code, title, scope: effectiveScope, programmeIds: selectedProgrammeIds },
+    });
     return NextResponse.json({ course: newCourse });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

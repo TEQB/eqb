@@ -93,6 +93,8 @@ export function BulkUploadStaging() {
     title: "",
     level: "100",
     scope: "departmental" as "departmental" | "shared" | "general",
+    shareMode: "faculty" as "faculty" | "programmes",
+    facultyId: "",
     programmeIds: [] as string[],
   });
 
@@ -124,13 +126,14 @@ export function BulkUploadStaging() {
   const openMissingCourseModal = useCallback((groupId: number, mode: "choice" | "edit" = "choice") => {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
-    const fallbackProgrammeId = programmes[0]?.id || "";
     setMissingCourseForm({
       code: group.proposedMetadata.courseCode || "",
       title: group.proposedMetadata.courseTitle || group.proposedMetadata.courseCode || "",
       level: group.proposedMetadata.level?.toString() || "100",
       scope: "departmental",
-      programmeIds: group.matchedCourseId ? [group.matchedCourseId] : fallbackProgrammeId ? [fallbackProgrammeId] : [],
+      shareMode: "faculty",
+      facultyId: "",
+      programmeIds: group.matchedCourseId ? [group.matchedCourseId] : [],
     });
     setPendingGroupIdForCreate(groupId);
     setCourseModalMode(mode);
@@ -150,7 +153,15 @@ export function BulkUploadStaging() {
       toast.warning("Course code and title are required");
       return;
     }
-    if (missingCourseForm.scope !== "general" && missingCourseForm.programmeIds.length === 0) {
+    const resolvedProgrammeIds =
+      missingCourseForm.scope === "departmental"
+        ? missingCourseForm.programmeIds.slice(0, 1)
+        : missingCourseForm.scope === "shared"
+          ? (missingCourseForm.shareMode === "faculty"
+            ? programmes.filter((programme) => programme.faculty_id === missingCourseForm.facultyId).map((programme) => programme.id)
+            : missingCourseForm.programmeIds)
+          : [];
+    if (missingCourseForm.scope !== "general" && resolvedProgrammeIds.length === 0) {
       toast.warning("Select at least one programme");
       return;
     }
@@ -164,7 +175,7 @@ export function BulkUploadStaging() {
           title: missingCourseForm.title.trim(),
           level: parseInt(missingCourseForm.level),
           scope: missingCourseForm.scope,
-          programmeIds: missingCourseForm.programmeIds,
+          programmeIds: resolvedProgrammeIds,
         }),
       });
       const data = await res.json();
@@ -182,7 +193,7 @@ export function BulkUploadStaging() {
                   title: newCourse.title,
                   level: parseInt(missingCourseForm.level),
                   scope: missingCourseForm.scope,
-                  programmeIds: missingCourseForm.programmeIds,
+                  programmeIds: resolvedProgrammeIds,
                 },
                 possibleMatches: [],
                 matchedCourseId: newCourse.id,
@@ -373,7 +384,7 @@ export function BulkUploadStaging() {
           title: g.newCourse.title,
           level: g.newCourse.level,
           scope: g.newCourse.scope,
-          departmentIds: g.newCourse.programmeIds,
+          programmeIds: g.newCourse.programmeIds,
         } : null,
         year: parseInt(g.year),
         semester: g.semester,
@@ -825,7 +836,13 @@ export function BulkUploadStaging() {
                         <label className="mb-1 block text-xs font-medium text-gray-600">Scope</label>
                         <select
                           value={missingCourseForm.scope}
-                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, scope: e.target.value as "departmental" | "shared" | "general" }))}
+                          onChange={(e) => setMissingCourseForm((prev) => ({
+                            ...prev,
+                            scope: e.target.value as "departmental" | "shared" | "general",
+                            shareMode: e.target.value === "shared" ? prev.shareMode : "faculty",
+                            facultyId: e.target.value === "shared" ? prev.facultyId : "",
+                            programmeIds: e.target.value === "general" ? [] : prev.programmeIds,
+                          }))}
                           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
                         >
                           <option value="departmental">Programme</option>
@@ -834,33 +851,83 @@ export function BulkUploadStaging() {
                         </select>
                       </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Programme(s)</label>
-                      <select
-                        multiple
-                        value={missingCourseForm.programmeIds}
-                        onChange={(e) => setMissingCourseForm((prev) => ({
-                          ...prev,
-                          programmeIds: Array.from(e.currentTarget.selectedOptions)
-                            .map((opt) => opt.value)
-                            .includes("__stand_alone__")
-                            ? []
-                            : Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value),
-                          scope: Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value).includes("__stand_alone__")
-                            ? "general"
-                            : prev.scope,
-                        }))}
-                        className="h-32 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                      >
-                        <option value="__stand_alone__">Stand-alone (general course)</option>
-                        {programmes.map((programme) => (
-                          <option key={programme.id} value={programme.id}>
-                            {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes, or choose stand-alone for a general course.</p>
-                    </div>
+                    {missingCourseForm.scope === "departmental" && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Programme</label>
+                        <select
+                          value={missingCourseForm.programmeIds[0] || ""}
+                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, programmeIds: e.target.value ? [e.target.value] : [] }))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                        >
+                          <option value="">Select programme</option>
+                          {programmes.map((programme) => (
+                            <option key={programme.id} value={programme.id}>
+                              {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {missingCourseForm.scope === "shared" && (
+                      <>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">Share with</label>
+                          <select
+                            value={missingCourseForm.shareMode}
+                            onChange={(e) => setMissingCourseForm((prev) => ({
+                              ...prev,
+                              shareMode: e.target.value as "faculty" | "programmes",
+                              facultyId: "",
+                              programmeIds: [],
+                            }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                          >
+                            <option value="faculty">Whole faculty</option>
+                            <option value="programmes">Specific programmes</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">Faculty</label>
+                          <select
+                            value={missingCourseForm.facultyId}
+                            onChange={(e) => setMissingCourseForm((prev) => ({
+                              ...prev,
+                              facultyId: e.target.value,
+                              programmeIds: [],
+                            }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                          >
+                            <option value="">Select faculty</option>
+                            {Array.from(new Map(programmes.map((p) => [p.faculty_id, p.faculty_name]))).map(([facultyId, facultyName]) => (
+                              <option key={facultyId} value={facultyId}>{facultyName}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {missingCourseForm.shareMode === "programmes" && (
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-gray-600">Programmes</label>
+                            <select
+                              multiple
+                              value={missingCourseForm.programmeIds}
+                              onChange={(e) => setMissingCourseForm((prev) => ({
+                                ...prev,
+                                programmeIds: Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value),
+                              }))}
+                              className="h-32 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
+                            >
+                              {programmes
+                                .filter((programme) => !missingCourseForm.facultyId || programme.faculty_id === missingCourseForm.facultyId)
+                                .map((programme) => (
+                                  <option key={programme.id} value={programme.id}>
+                                    {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
+                                  </option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                     <div className="flex flex-wrap gap-3">
                       <button
                         type="button"
