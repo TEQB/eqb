@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo } from "react";
 import { toast } from "@/components/ui/toaster";
 import { EditModal, EntityType } from "./EditModal";
+import { CreateCourseForm } from "@/components/courses/CreateCourseForm";
 
 type Tab = "faculties" | "programmes" | "courses";
 
@@ -44,7 +45,6 @@ export function DataOverview() {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [allProgrammes, setAllProgrammes] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("faculties");
   const [search, setSearch] = useState("");
@@ -69,9 +69,6 @@ export function DataOverview() {
   useEffect(() => {
     async function init() {
       await loadData();
-      const r = await fetch("/api/admin?action=list-programmes", { method: "GET" });
-      const d = await r.json();
-      if (d.programmes) setAllProgrammes(d.programmes);
       setLoading(false);
     }
     init();
@@ -85,8 +82,7 @@ export function DataOverview() {
 
     let action: string;
     if (tab === "faculties") action = "seed-faculty";
-    else if (tab === "programmes") action = "seed-programme";
-    else action = "seed-course";
+    else action = "seed-programme";
 
     const res = await fetch(`/api/admin?action=${action}`, { method: "POST", body: formData });
     const data = await res.json();
@@ -97,11 +93,6 @@ export function DataOverview() {
       form.reset();
       setShowForm(false);
       await loadData();
-      if (tab === "courses") {
-        const r = await fetch("/api/admin?action=list-programmes", { method: "POST" });
-        const d = await r.json();
-        if (d.programmes) setAllProgrammes(d.programmes);
-      }
     } else {
       const err = data.error || "Error";
       setMsg({ text: err, ok: false });
@@ -214,7 +205,7 @@ export function DataOverview() {
           </div>
         </div>
 
-        {showForm && (
+        {showForm && tab !== "courses" && (
           <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
             <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
               {tab === "faculties" && (
@@ -255,60 +246,34 @@ export function DataOverview() {
                 </>
               )}
 
-              {tab === "courses" && (
-                <>
-                  <div className="w-28">
-                    <label className="block text-xs font-medium text-gray-700">Code</label>
-                    <input name="code" type="text" required placeholder="GST101"
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-primary-600 focus:ring-2 focus:ring-primary-100" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <label className="block text-xs font-medium text-gray-700">Title</label>
-                    <input name="title" type="text" required placeholder="e.g. Use of English"
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-primary-600 focus:ring-2 focus:ring-primary-100" />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-xs font-medium text-gray-700">Level</label>
-                    <select name="level" required
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
-                      <option value="">Level</option>
-                      {[100, 200, 300, 400, 500].map((l) => (
-                        <option key={l} value={l}>{l}L</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="w-28">
-                    <label className="block text-xs font-medium text-gray-700">Scope</label>
-                    <select name="scope" defaultValue="departmental"
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
-                      <option value="departmental">Programme</option>
-                      <option value="shared">Shared</option>
-                      <option value="general">General</option>
-                    </select>
-                  </div>
-                  <div className="min-w-0 flex-[2]">
-                    <label className="block text-xs font-medium text-gray-700">Programme</label>
-                    <select name="programme_id"
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
-                      <option value="">None (general)</option>
-                      {allProgrammes.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="submit"
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700">
-                    Create
-                  </button>
-                </>
-              )}
-
               {msg && (
                 <p className={`w-full rounded-md px-3 py-2 text-xs ${msg.ok ? "bg-success-50 text-success-700" : "bg-danger-50 text-danger-700"}`}>
                   {msg.text}
                 </p>
               )}
             </form>
+          </div>
+        )}
+
+        {showForm && tab === "courses" && (
+          <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
+            <CreateCourseForm
+              heading="Add Course"
+              postUrl="/api/admin?action=create-course"
+              programmes={programmes}
+              onSuccess={async () => {
+                setMsg({ text: "Created successfully", ok: true });
+                toast.success("Created successfully");
+                setShowForm(false);
+                await loadData();
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+            {msg && (
+              <p className={`mt-3 rounded-md px-3 py-2 text-xs ${msg.ok ? "bg-success-50 text-success-700" : "bg-danger-50 text-danger-700"}`}>
+                {msg.text}
+              </p>
+            )}
           </div>
         )}
 

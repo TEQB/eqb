@@ -43,7 +43,7 @@ export type Database = {
         Row: {
           code: string
           created_at: string | null
-          department_id: string | null
+          programme_id: string | null
           id: string
           level: number
           scope: string
@@ -52,7 +52,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string | null
-          department_id?: string | null
+          programme_id?: string | null
           id?: string
           level: number
           scope?: string
@@ -61,7 +61,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string | null
-          department_id?: string | null
+          programme_id?: string | null
           id?: string
           level?: number
           scope?: string
@@ -69,45 +69,45 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "courses_department_id_fkey"
-            columns: ["department_id"]
+            foreignKeyName: "courses_programme_id_fkey"
+            columns: ["programme_id"]
             isOneToOne: false
-            referencedRelation: "departments"
+            referencedRelation: "programmes"
             referencedColumns: ["id"]
           },
         ]
       }
-      department_courses: {
+      programme_courses: {
         Row: {
           course_id: string
-          department_id: string
+          programme_id: string
         }
         Insert: {
           course_id: string
-          department_id: string
+          programme_id: string
         }
         Update: {
           course_id?: string
-          department_id?: string
+          programme_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "department_courses_course_id_fkey"
+            foreignKeyName: "programme_courses_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "department_courses_department_id_fkey"
-            columns: ["department_id"]
+            foreignKeyName: "programme_courses_programme_id_fkey"
+            columns: ["programme_id"]
             isOneToOne: false
-            referencedRelation: "departments"
+            referencedRelation: "programmes"
             referencedColumns: ["id"]
           },
         ]
       }
-      departments: {
+      programmes: {
         Row: {
           available_levels: number[]
           created_at: string | null
@@ -134,7 +134,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "departments_faculty_id_fkey"
+            foreignKeyName: "programmes_faculty_id_fkey"
             columns: ["faculty_id"]
             isOneToOne: false
             referencedRelation: "faculties"
@@ -360,7 +360,7 @@ export type Database = {
         Row: {
           created_at: string | null
           current_level: number
-          department_id: string
+          programme_id: string
           email: string
           full_name: string
           matric_number: string
@@ -368,7 +368,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_level: number
-          department_id: string
+          programme_id: string
           email: string
           full_name: string
           matric_number: string
@@ -376,7 +376,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_level?: number
-          department_id?: string
+          programme_id?: string
           email?: string
           full_name?: string
           matric_number?: string
@@ -409,7 +409,7 @@ export type Database = {
           auth_user_id: string
           created_at: string | null
           current_level: number
-          department_id: string
+          programme_id: string
           full_name: string
           id: string
           is_locked: boolean
@@ -421,7 +421,7 @@ export type Database = {
           auth_user_id: string
           created_at?: string | null
           current_level: number
-          department_id: string
+          programme_id: string
           full_name: string
           id?: string
           is_locked?: boolean
@@ -433,7 +433,7 @@ export type Database = {
           auth_user_id?: string
           created_at?: string | null
           current_level?: number
-          department_id?: string
+          programme_id?: string
           full_name?: string
           id?: string
           is_locked?: boolean
@@ -443,10 +443,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "profiles_department_id_fkey"
-            columns: ["department_id"]
+            foreignKeyName: "profiles_programme_id_fkey"
+            columns: ["programme_id"]
             isOneToOne: false
-            referencedRelation: "departments"
+            referencedRelation: "programmes"
             referencedColumns: ["id"]
           },
         ]
@@ -594,7 +594,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      current_student_department: { Args: never; Returns: string }
+      current_student_programme: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

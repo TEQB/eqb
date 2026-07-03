@@ -1,6 +1,6 @@
 SELECT 'faculties' as tbl, count(*)::text as cnt FROM faculties
 UNION ALL
-SELECT 'departments', count(*)::text FROM departments
+SELECT 'programmes', count(*)::text FROM programmes
 UNION ALL
 SELECT 'courses', count(*)::text FROM courses
 UNION ALL

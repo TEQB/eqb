@@ -11,36 +11,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { code, title, level, scope = "departmental", programmeIds = [] } = await req.json();
+    const {
+      code,
+      title,
+      level,
+      scope = "departmental",
+      programme_id,
+      programmeIds = [],
+      standAlone = false,
+    } = await req.json();
 
-    if (!code || !title || !level) {
+    if (!code || !title || level == null) {
       return NextResponse.json({ error: "code, title, and level are required" }, { status: 400 });
     }
 
     const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("department_id")
+      .select("programme_id")
       .eq("auth_user_id", user.id)
       .single();
-    const profile = rawProfile as unknown as { department_id: string } | null;
-    if (!profile?.department_id) {
+    const profile = rawProfile as unknown as { programme_id: string } | null;
+    if (!profile?.programme_id) {
       return NextResponse.json({ error: "Your profile does not have a programme assigned. Please contact support." }, { status: 404 });
     }
 
     const service = createServiceClient();
-    const selectedProgrammeIds = Array.isArray(programmeIds)
+    const sharedProgrammeIds = Array.isArray(programmeIds)
       ? programmeIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
       : [];
-    const owningProgrammeId = selectedProgrammeIds[0] || profile.department_id;
-    const effectiveScope = scope === "shared" ? "shared" : scope === "general" ? "general" : "departmental";
+    const ownerProgrammeId = standAlone
+      ? null
+      : (programme_id || sharedProgrammeIds[0] || profile.programme_id);
+    const dbScope = standAlone
+      ? "general"
+      : scope === "programme_specific"
+        ? "departmental"
+        : scope === "shared"
+          ? "shared"
+          : scope === "general"
+            ? "general"
+            : "departmental";
+
+    if (!standAlone && !ownerProgrammeId) {
+      return NextResponse.json({ error: "Select a programme owner" }, { status: 400 });
+    }
+    if (dbScope === "shared" && sharedProgrammeIds.length === 0) {
+      return NextResponse.json({ error: "Select at least one programme for shared scope" }, { status: 400 });
+    }
+
+    const parsedLevel = typeof level === "number" ? level : parseInt(level, 10);
+    if (Number.isNaN(parsedLevel)) {
+      return NextResponse.json({ error: "Invalid level" }, { status: 400 });
+    }
+
     const { data: newCourse, error } = await service
       .from("courses")
       .insert({
         code: code.toUpperCase(),
         title,
-        level: parseInt(level, 10),
-        department_id: effectiveScope === "departmental" ? owningProgrammeId : null,
-        scope: effectiveScope,
+        level: parsedLevel,
+        programme_id: ownerProgrammeId,
+        scope: dbScope,
       } as never)
       .select("id, code, title, level, scope")
       .single();
@@ -55,10 +86,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to retrieve created course" }, { status: 500 });
     }
 
-    if ((effectiveScope === "shared" || effectiveScope === "general") && selectedProgrammeIds.length > 0) {
-      await service.from("department_courses").insert(
-        selectedProgrammeIds.map((department_id) => ({
-          department_id,
+    if (dbScope === "shared" && sharedProgrammeIds.length > 0) {
+      const uniqueIds = Array.from(new Set(sharedProgrammeIds));
+      await service.from("programme_courses").insert(
+        uniqueIds.map((programme_id) => ({
+          programme_id,
           course_id: (newCourse as { id: string }).id,
         })) as never,
       );
@@ -68,7 +100,7 @@ export async function POST(req: NextRequest) {
       event: "courses.created",
       message: "Course created by student",
       userId: user.id,
-      metadata: { code, title, scope: effectiveScope, programmeIds: selectedProgrammeIds },
+      metadata: { code, title, scope: dbScope, programmeIds: sharedProgrammeIds },
     });
     return NextResponse.json({ course: newCourse });
   } catch (error) {

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET() {
   const supabase = createClient();
   const { data } = await supabase
-    .from("departments")
+    .from("programmes")
     .select("id, name, faculty_id, faculties!inner(name)")
     .order("name");
 

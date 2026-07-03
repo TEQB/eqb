@@ -6,6 +6,7 @@ import { formatSession } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { X, Upload, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, Image as ImageIcon, Maximize2 } from "lucide-react";
 import { ImageViewer } from "@/components/question/ImageViewer";
+import { CreateCourseForm } from "@/components/courses/CreateCourseForm";
 
 interface ExtractedPage {
   stagedPath: string;
@@ -86,17 +87,6 @@ export function BulkUploadStaging() {
   const signedUrlCacheRef = useRef<Record<string, string>>({});
   const [missingCourseModal, setMissingCourseModal] = useState(false);
   const [pendingGroupIdForCreate, setPendingGroupIdForCreate] = useState<number | null>(null);
-  const [courseModalMode, setCourseModalMode] = useState<"choice" | "edit">("choice");
-  const [creatingCourse, setCreatingCourse] = useState(false);
-  const [missingCourseForm, setMissingCourseForm] = useState({
-    code: "",
-    title: "",
-    level: "100",
-    scope: "departmental" as "departmental" | "shared" | "general",
-    shareMode: "faculty" as "faculty" | "programmes",
-    facultyId: "",
-    programmeIds: [] as string[],
-  });
 
   const parseSessionYear = useCallback((session: string | null) => {
     if (!session) return null;
@@ -123,94 +113,46 @@ export function BulkUploadStaging() {
     return null;
   }, []);
 
-  const openMissingCourseModal = useCallback((groupId: number, mode: "choice" | "edit" = "choice") => {
+  const openMissingCourseModal = useCallback((groupId: number) => {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
-    setMissingCourseForm({
-      code: group.proposedMetadata.courseCode || "",
-      title: group.proposedMetadata.courseTitle || group.proposedMetadata.courseCode || "",
-      level: group.proposedMetadata.level?.toString() || "100",
-      scope: "departmental",
-      shareMode: "faculty",
-      facultyId: "",
-      programmeIds: group.matchedCourseId ? [group.matchedCourseId] : [],
-    });
     setPendingGroupIdForCreate(groupId);
-    setCourseModalMode(mode);
     setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, createCoursePrompted: true } : g)));
     setMissingCourseModal(true);
-  }, [groups, programmes]);
+  }, [groups]);
 
   const closeMissingCourseModal = useCallback(() => {
     setMissingCourseModal(false);
     setPendingGroupIdForCreate(null);
-    setCourseModalMode("choice");
   }, []);
 
-  const handleModalCreate = async () => {
-    if (!pendingGroupIdForCreate) return;
-    if (!missingCourseForm.code.trim() || !missingCourseForm.title.trim()) {
-      toast.warning("Course code and title are required");
-      return;
-    }
-    const resolvedProgrammeIds =
-      missingCourseForm.scope === "departmental"
-        ? missingCourseForm.programmeIds.slice(0, 1)
-        : missingCourseForm.scope === "shared"
-          ? (missingCourseForm.shareMode === "faculty"
-            ? programmes.filter((programme) => programme.faculty_id === missingCourseForm.facultyId).map((programme) => programme.id)
-            : missingCourseForm.programmeIds)
-          : [];
-    if (missingCourseForm.scope !== "general" && resolvedProgrammeIds.length === 0) {
-      toast.warning("Select at least one programme");
-      return;
-    }
-    setCreatingCourse(true);
-    try {
-      const res = await fetch("/api/admin?action=create-course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: missingCourseForm.code.trim(),
-          title: missingCourseForm.title.trim(),
-          level: parseInt(missingCourseForm.level),
-          scope: missingCourseForm.scope,
-          programmeIds: resolvedProgrammeIds,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create course");
-      const newCourse = data.course;
-      setCourses((prev) => [...prev, newCourse].sort((a, b) => a.code.localeCompare(b.code)));
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.id === pendingGroupIdForCreate
-            ? {
-                ...g,
-                courseId: newCourse.id,
-                newCourse: {
-                  code: newCourse.code,
-                  title: newCourse.title,
-                  level: parseInt(missingCourseForm.level),
-                  scope: missingCourseForm.scope,
-                  programmeIds: resolvedProgrammeIds,
-                },
-                possibleMatches: [],
-                matchedCourseId: newCourse.id,
-                createCoursePrompted: true,
-              }
-            : g
-        )
-      );
-      closeMissingCourseModal();
-      toast.success(`Course "${newCourse.code}" created and selected`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create course";
-      toast.error(msg);
-    } finally {
-      setCreatingCourse(false);
-    }
-  };
+  const handleCreatedCourse = useCallback((newCourse: { id: string; code: string; title: string; level: number; scope: string }) => {
+    if (pendingGroupIdForCreate === null) return;
+    const groupId = pendingGroupIdForCreate;
+    setCourses((prev) => [...prev, newCourse].sort((a, b) => a.code.localeCompare(b.code)));
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              courseId: newCourse.id,
+              newCourse: {
+                code: newCourse.code,
+                title: newCourse.title,
+                level: newCourse.level,
+                scope: newCourse.scope,
+                programmeIds: [],
+              },
+              possibleMatches: [],
+              matchedCourseId: newCourse.id,
+              createCoursePrompted: true,
+            }
+          : g
+      )
+    );
+    closeMissingCourseModal();
+    toast.success(`Course "${newCourse.code}" created and selected`);
+  }, [pendingGroupIdForCreate, closeMissingCourseModal]);
 
   useEffect(() => {
     fetch("/api/admin?action=courses")
@@ -276,7 +218,7 @@ export function BulkUploadStaging() {
         g.possibleMatches.length === 0,
     );
     if (nextMissing) {
-      openMissingCourseModal(nextMissing.id, "choice");
+      openMissingCourseModal(nextMissing.id);
     }
   }, [groups, extracting, missingCourseModal, openMissingCourseModal]);
 
@@ -774,186 +716,28 @@ export function BulkUploadStaging() {
             return (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  We could not find a matching course for <span className="font-semibold text-gray-900">{group.proposedMetadata.courseCode || "this group"}</span>.
+                  We could not find a matching course for{" "}
+                  <span className="font-semibold text-gray-900">
+                    {group.proposedMetadata.courseCode || "this group"}
+                  </span>
+                  . Create it below or skip this group.
                 </p>
-                {courseModalMode === "choice" ? (
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleModalCreate()}
-                      disabled={creatingCourse}
-                      className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-                    >
-                      Yes, create it
-                    </button>
-                    <button
-                      type="button"
-                      onClick={closeMissingCourseModal}
-                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                    >
-                      No, skip
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCourseModalMode("edit")}
-                      className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100"
-                    >
-                      Edit details
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Course code</label>
-                        <input
-                          value={missingCourseForm.code}
-                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, code: e.target.value }))}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Title</label>
-                        <input
-                          value={missingCourseForm.title}
-                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, title: e.target.value }))}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Level</label>
-                        <select
-                          value={missingCourseForm.level}
-                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, level: e.target.value }))}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                        >
-                          {[100, 200, 300, 400, 500, 600, 700].map((level) => (
-                            <option key={level} value={level}>{level}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Scope</label>
-                        <select
-                          value={missingCourseForm.scope}
-                          onChange={(e) => setMissingCourseForm((prev) => ({
-                            ...prev,
-                            scope: e.target.value as "departmental" | "shared" | "general",
-                            shareMode: e.target.value === "shared" ? prev.shareMode : "faculty",
-                            facultyId: e.target.value === "shared" ? prev.facultyId : "",
-                            programmeIds: e.target.value === "general" ? [] : prev.programmeIds,
-                          }))}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                        >
-                          <option value="departmental">Programme</option>
-                          <option value="shared">Shared</option>
-                          <option value="general">General</option>
-                        </select>
-                      </div>
-                    </div>
-                    {missingCourseForm.scope === "departmental" && (
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Programme</label>
-                        <select
-                          value={missingCourseForm.programmeIds[0] || ""}
-                          onChange={(e) => setMissingCourseForm((prev) => ({ ...prev, programmeIds: e.target.value ? [e.target.value] : [] }))}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                        >
-                          <option value="">Select programme</option>
-                          {programmes.map((programme) => (
-                            <option key={programme.id} value={programme.id}>
-                              {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    {missingCourseForm.scope === "shared" && (
-                      <>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">Share with</label>
-                          <select
-                            value={missingCourseForm.shareMode}
-                            onChange={(e) => setMissingCourseForm((prev) => ({
-                              ...prev,
-                              shareMode: e.target.value as "faculty" | "programmes",
-                              facultyId: "",
-                              programmeIds: [],
-                            }))}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                          >
-                            <option value="faculty">Whole faculty</option>
-                            <option value="programmes">Specific programmes</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">Faculty</label>
-                          <select
-                            value={missingCourseForm.facultyId}
-                            onChange={(e) => setMissingCourseForm((prev) => ({
-                              ...prev,
-                              facultyId: e.target.value,
-                              programmeIds: [],
-                            }))}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                          >
-                            <option value="">Select faculty</option>
-                            {Array.from(new Map(programmes.map((p) => [p.faculty_id, p.faculty_name]))).map(([facultyId, facultyName]) => (
-                              <option key={facultyId} value={facultyId}>{facultyName}</option>
-                            ))}
-                          </select>
-                        </div>
-                        {missingCourseForm.shareMode === "programmes" && (
-                          <div>
-                            <label className="mb-1 block text-xs font-medium text-gray-600">Programmes</label>
-                            <select
-                              multiple
-                              value={missingCourseForm.programmeIds}
-                              onChange={(e) => setMissingCourseForm((prev) => ({
-                                ...prev,
-                                programmeIds: Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value),
-                              }))}
-                              className="h-32 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-100"
-                            >
-                              {programmes
-                                .filter((programme) => !missingCourseForm.facultyId || programme.faculty_id === missingCourseForm.facultyId)
-                                .map((programme) => (
-                                  <option key={programme.id} value={programme.id}>
-                                    {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
-                                  </option>
-                                ))}
-                            </select>
-                            <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes.</p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={handleModalCreate}
-                        disabled={creatingCourse}
-                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-                      >
-                        {creatingCourse ? "Creating..." : "Create course"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCourseModalMode("choice")}
-                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                      >
-                        Back
-                      </button>
-                      <button
-                        type="button"
-                        onClick={closeMissingCourseModal}
-                        className="rounded-lg border border-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <CreateCourseForm
+                  heading="Create Course"
+                  postUrl="/api/admin?action=create-course"
+                  programmes={programmes}
+                  initialCode={group.proposedMetadata.courseCode || ""}
+                  initialTitle={group.proposedMetadata.courseTitle || group.proposedMetadata.courseCode || ""}
+                  onSuccess={handleCreatedCourse}
+                  onCancel={closeMissingCourseModal}
+                />
+                <button
+                  type="button"
+                  onClick={closeMissingCourseModal}
+                  className="text-sm font-medium text-gray-500 hover:text-gray-700"
+                >
+                  Skip this group
+                </button>
               </div>
             );
           })()}

@@ -8,7 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 import { uploadSchema } from "@/lib/validations";
 import { FileDropzone } from "./FileDropzone";
 import { toast } from "@/components/ui/toaster";
-import { formatSession } from "@/lib/utils";
+import { formatSession, deriveLevelAndSemesterFromCode } from "@/lib/utils";
+import { CreateCourseForm } from "@/components/courses/CreateCourseForm";
+import { JoinSharedCourse } from "@/components/courses/JoinSharedCourse";
 
 type UploadData = z.infer<typeof uploadSchema>;
 
@@ -18,12 +20,7 @@ interface Course {
   title: string;
   level: number;
   scope: string;
-}
-
-interface Faculty {
-  id: string;
-  name: string;
-  slug: string;
+  programme_id?: string;
 }
 
 interface Programme {
@@ -46,36 +43,29 @@ const MAX_PAGES = 6;
 export function UploadForm({
   courses: initialCourses,
   preselectedCourseId,
-  faculties: initialFaculties = [],
   programmes: initialProgrammes = [],
   currentProgrammeId = "",
+  currentProgrammeName = "",
+  joinableSharedCourses: initialJoinable = [],
 }: {
   courses: Course[];
   preselectedCourseId?: string | null;
-  faculties?: Faculty[];
   programmes?: Programme[];
   currentProgrammeId?: string;
+  currentProgrammeName?: string;
+  joinableSharedCourses?: Course[];
 }) {
   const supabase = createClient();
 
   const [courses, setCourses] = useState<Course[]>(initialCourses);
-  const [faculties, setFaculties] = useState<Faculty[]>(initialFaculties);
   const [programmes, setProgrammes] = useState<Programme[]>(initialProgrammes);
+  const [joinableSharedCourses, setJoinableSharedCourses] = useState<Course[]>(initialJoinable);
   const [pages, setPages] = useState<(File | null)[]>([null]);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState("");
 
   const [showAddCourse, setShowAddCourse] = useState(false);
-  const [newCode, setNewCode] = useState("");
-  const [newTitle, setNewTitle] = useState("");
-  const [newLevel, setNewLevel] = useState("100");
-  const [newScope, setNewScope] = useState<"departmental" | "shared" | "general">("departmental");
-  const [newSharedMode, setNewSharedMode] = useState<"faculty" | "programmes">("faculty");
-  const [newFacultyId, setNewFacultyId] = useState("");
-  const [newProgrammeIds, setNewProgrammeIds] = useState<string[]>([]);
-  const [newDepartmentProgrammeId, setNewDepartmentProgrammeId] = useState(currentProgrammeId);
-  const [addingCourse, setAddingCourse] = useState(false);
 
   const {
     register,
@@ -104,85 +94,48 @@ export function UploadForm({
   }, [initialCourses]);
 
   useEffect(() => {
-    if (initialFaculties.length > 0) setFaculties(initialFaculties);
-    if (initialProgrammes.length > 0) setProgrammes(initialProgrammes);
-  }, [initialFaculties, initialProgrammes]);
+    setJoinableSharedCourses(initialJoinable);
+  }, [initialJoinable]);
 
   useEffect(() => {
-    if (faculties.length > 0 && programmes.length > 0) return;
+    if (initialProgrammes.length > 0) setProgrammes(initialProgrammes);
+  }, [initialProgrammes]);
+
+  useEffect(() => {
+    if (programmes.length > 0) return;
     let active = true;
-    async function loadLookupData() {
-      const [facultyRes, programmeRes] = await Promise.all([
-        fetch("/api/browse/faculties"),
-        fetch("/api/browse/programmes"),
-      ]);
-      const facultyData = await facultyRes.json();
+    async function loadProgrammes() {
+      const programmeRes = await fetch("/api/browse/programmes");
       const programmeData = await programmeRes.json();
       if (!active) return;
-      if (facultyData.faculties) setFaculties(facultyData.faculties);
       if (programmeData.programmes) setProgrammes(programmeData.programmes);
     }
-    loadLookupData();
+    loadProgrammes();
     return () => {
       active = false;
     };
-  }, [faculties.length, programmes.length]);
+  }, [programmes.length]);
 
   const selectedCourseId = watch("courseId");
-  const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+  const selectedCourse =
+    courses.find((c) => c.id === selectedCourseId) ||
+    joinableSharedCourses.find((c) => c.id === selectedCourseId);
+  const needsJoin =
+    !!selectedCourse &&
+    selectedCourse.scope === "shared" &&
+    joinableSharedCourses.some((c) => c.id === selectedCourse.id);
 
-  const handleAddCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCode || !newTitle) return;
-    const resolvedProgrammeIds =
-      newScope === "departmental"
-        ? [newDepartmentProgrammeId || currentProgrammeId].filter(Boolean)
-        : newScope === "shared"
-          ? (newSharedMode === "faculty"
-            ? programmes.filter((programme) => programme.faculty_id === newFacultyId).map((programme) => programme.id)
-            : newProgrammeIds)
-          : [];
-    if (newScope === "departmental" && resolvedProgrammeIds.length === 0) {
-      setError("Select a programme for departmental scope");
-      toast.warning("Select a programme for departmental scope");
-      return;
-    }
-    if (newScope === "shared" && resolvedProgrammeIds.length === 0) {
-      setError("Select at least one programme for shared scope");
-      toast.warning("Select at least one programme for shared scope");
-      return;
-    }
-    setAddingCourse(true);
-    try {
-      const res = await fetch("/api/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: newCode, title: newTitle, level: newLevel, scope: newScope, programmeIds: resolvedProgrammeIds }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to add course");
-        toast.error(data.error || "Failed to add course");
-        return;
-      }
-      const created = data.course as Course;
-      setCourses((prev) => [...prev, created]);
-      setValue("courseId", created.id);
-      setShowAddCourse(false);
-      setNewCode("");
-      setNewTitle("");
-      setNewLevel("100");
-      setNewScope("departmental");
-      setNewSharedMode("faculty");
-      setNewFacultyId("");
-      setNewProgrammeIds([]);
-      setNewDepartmentProgrammeId(currentProgrammeId);
-      toast.success("Course added");
-    } catch {
-      setError("Failed to add course");
-      toast.error("Failed to add course");
-    } finally {
-      setAddingCourse(false);
+  useEffect(() => {
+    if (!selectedCourse) return;
+    const derived = deriveLevelAndSemesterFromCode(selectedCourse.code);
+    if (derived) setValue("semester", derived.semester);
+  }, [selectedCourse, setValue]);
+
+  const handleCourseJoined = (joinedCourseId: string) => {
+    const joined = joinableSharedCourses.find((c) => c.id === joinedCourseId);
+    if (joined) {
+      setCourses((prev) => [...prev, joined].sort((a, b) => a.level - b.level));
+      setJoinableSharedCourses((prev) => prev.filter((c) => c.id !== joinedCourseId));
     }
   };
 
@@ -202,6 +155,11 @@ export function UploadForm({
       if (!firstPage) {
         setError("Please select a file for page 1");
         toast.warning("Please select a file for page 1");
+        return;
+      }
+      if (needsJoin) {
+        setError("Link your programme to this shared course before uploading");
+        toast.warning("Link your programme to this shared course first");
         return;
       }
       setError("");
@@ -337,7 +295,7 @@ export function UploadForm({
         toast.error(result.reason || "Upload rejected by AI review");
       }
     },
-    [pages, supabase, courses],
+    [pages, supabase, courses, needsJoin],
   );
 
   const handlePageSelect = (index: number, file: File | null) => {
@@ -383,7 +341,6 @@ export function UploadForm({
   return (
     <>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Pages */}
         <div className="space-y-4">
           <label className="block text-sm font-medium text-gray-700">
             Pages <span className="text-danger-500">*</span>
@@ -425,7 +382,6 @@ export function UploadForm({
           )}
         </div>
 
-        {/* Course Select */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Course
@@ -443,6 +399,15 @@ export function UploadForm({
                   {c.scope !== "departmental" ? ` (${SCOPE_LABELS[c.scope] ?? c.scope})` : ""}
                 </option>
               ))}
+              {joinableSharedCourses.length > 0 && (
+                <optgroup label="Shared courses you can join">
+                  {joinableSharedCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} — {c.title} (join required)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <button
               type="button"
@@ -453,19 +418,37 @@ export function UploadForm({
             </button>
           </div>
           {selectedCourse && (
-            <div className="mt-1.5 flex items-center gap-2">
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                selectedCourse.scope === "general"
-                  ? "bg-purple-100 text-purple-800"
-                  : selectedCourse.scope === "shared"
-                  ? "bg-blue-100 text-blue-800"
-                  : "bg-gray-100 text-gray-700"
-              }`}>
-                {SCOPE_LABELS[selectedCourse.scope] ?? selectedCourse.scope}
-              </span>
-              <span className="text-xs text-gray-400">
-                {selectedCourse.level} Level
-              </span>
+            <div className="mt-1.5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  selectedCourse.scope === "general"
+                    ? "bg-purple-100 text-purple-800"
+                    : selectedCourse.scope === "shared"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-gray-100 text-gray-700"
+                }`}>
+                  {SCOPE_LABELS[selectedCourse.scope] ?? selectedCourse.scope}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {selectedCourse.level} Level
+                </span>
+              </div>
+              {needsJoin && currentProgrammeName && (
+                <JoinSharedCourse
+                  courseId={selectedCourse.id}
+                  courseCode={selectedCourse.code}
+                  programmeName={currentProgrammeName}
+                  onJoined={handleCourseJoined}
+                />
+              )}
+              {selectedCourse.scope === "departmental" &&
+                selectedCourse.programme_id &&
+                selectedCourse.programme_id !== currentProgrammeId && (
+                  // TODO: escalate to admin — programme-specific course owned by another programme
+                  <p className="text-xs text-amber-700">
+                    This course is programme-specific to another programme. Contact an admin to request access.
+                  </p>
+                )}
             </div>
           )}
         </div>
@@ -523,7 +506,7 @@ export function UploadForm({
 
         <button
           type="submit"
-          disabled={isSubmitting || uploadState === "uploading" || uploadState === "reviewing"}
+          disabled={isSubmitting || uploadState === "uploading" || uploadState === "reviewing" || needsJoin}
           className="w-full rounded-md bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploadState === "uploading"
@@ -536,163 +519,22 @@ export function UploadForm({
 
       {showAddCourse && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddCourse(false)}>
-          <form
-            onSubmit={handleAddCourse}
+          <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
           >
-            <h4 className="text-sm font-semibold text-gray-900">Add New Course</h4>
-            <div>
-              <label className="block text-xs font-medium text-gray-700">Course Code</label>
-              <input
-                type="text"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                required
-                placeholder="e.g. CSC101"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700">Course Title</label>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                required
-                placeholder="e.g. Introduction to Programming"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 block">Level</label>
-              <select
-                value={newLevel}
-                onChange={(e) => setNewLevel(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-              >
-                <option value="100">100 Level</option>
-                <option value="200">200 Level</option>
-                <option value="300">300 Level</option>
-                <option value="400">400 Level</option>
-                <option value="500">500 Level</option>
-                <option value="600">600 Level</option>
-              </select>
-            </div>
-              <div>
-                <label className="text-xs font-medium text-gray-700 block">Scope</label>
-                <select
-                  value={newScope}
-                  onChange={(e) => {
-                    const nextScope = e.target.value as "departmental" | "shared" | "general";
-                    setNewScope(nextScope);
-                    if (nextScope !== "shared") {
-                      setNewSharedMode("faculty");
-                      setNewFacultyId("");
-                      setNewProgrammeIds([]);
-                    }
-                  }}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-                >
-                  <option value="departmental">Programme (only your programme)</option>
-                  <option value="shared">Shared (visible to selected programmes)</option>
-                  <option value="general">General (all students)</option>
-                </select>
-              </div>
-              {newScope === "departmental" && (
-                <div>
-                  <label className="text-xs font-medium text-gray-700 block">Programme</label>
-                  <select
-                    value={newDepartmentProgrammeId}
-                    onChange={(e) => setNewDepartmentProgrammeId(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-                  >
-                    <option value="">Select programme</option>
-                    {programmes.map((programme) => (
-                      <option key={programme.id} value={programme.id}>
-                        {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {newScope === "shared" && (
-                <>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 block">Share with</label>
-                    <select
-                      value={newSharedMode}
-                      onChange={(e) => {
-                        const mode = e.target.value as "faculty" | "programmes";
-                        setNewSharedMode(mode);
-                        setNewFacultyId("");
-                        setNewProgrammeIds([]);
-                      }}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-                    >
-                      <option value="faculty">Whole faculty</option>
-                      <option value="programmes">Specific programmes</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 block">Faculty</label>
-                    <select
-                      value={newFacultyId}
-                      onChange={(e) => {
-                        setNewFacultyId(e.target.value);
-                        setNewProgrammeIds([]);
-                      }}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-                    >
-                      <option value="">Select faculty</option>
-                      {faculties.map((faculty) => (
-                        <option key={faculty.id} value={faculty.id}>
-                          {faculty.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {newSharedMode === "programmes" && (
-                    <div>
-                      <label className="text-xs font-medium text-gray-700 block">Programmes</label>
-                      <select
-                        multiple
-                        value={newProgrammeIds}
-                        onChange={(e) =>
-                          setNewProgrammeIds(Array.from(e.currentTarget.selectedOptions).map((opt) => opt.value))
-                        }
-                        className="mt-1 block h-32 w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-                      >
-                        {programmes
-                          .filter((programme) => !newFacultyId || programme.faculty_id === newFacultyId)
-                          .map((programme) => (
-                            <option key={programme.id} value={programme.id}>
-                              {programme.name} {programme.faculty_name ? `(${programme.faculty_name})` : ""}
-                            </option>
-                          ))}
-                      </select>
-                      <p className="mt-1 text-xs text-gray-500">Hold Ctrl or Cmd to select multiple programmes.</p>
-                    </div>
-                  )}
-                </>
-              )}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={addingCourse}
-                className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {addingCourse ? "Adding..." : "Add Course"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddCourse(false)}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+            <CreateCourseForm
+              postUrl="/api/courses"
+              programmes={programmes}
+              onSuccess={(created) => {
+                setCourses((prev) => [...prev, created]);
+                setValue("courseId", created.id);
+                setShowAddCourse(false);
+                toast.success("Course added");
+              }}
+              onCancel={() => setShowAddCourse(false)}
+            />
+          </div>
         </div>
       )}
     </>

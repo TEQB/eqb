@@ -68,7 +68,7 @@ export function RegisterForm() {
       return;
     }
     fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/departments?select=id,name,available_levels&faculty_id=eq.${selectedFaculty}&order=name.asc`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/programmes?select=id,name,available_levels&faculty_id=eq.${selectedFaculty}&order=name.asc`,
       { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } },
     )
       .then((r) => (r.ok ? r.json() : []))

@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
       }
 
       case "courses": {
-        const { data: list } = await service.from("courses").select("id, code, title, level, scope, department_id").order("code");
+        const { data: list } = await service.from("courses").select("id, code, title, level, scope, programme_id").order("code");
         return NextResponse.json({ courses: list ?? [] });
       }
 
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
           .from("past_questions")
           .select(`
             id, course_id, year, semester, exam_type, file_url, file_type, status, flag_count, created_at,
-            courses!inner(code, title, level, department_id),
+            courses!inner(code, title, level, programme_id),
             profiles!inner(full_name, auth_user_id)
           `, { count: "exact" });
 
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
           query = query.eq("status", status);
         }
         if (programmeId) {
-          query = query.eq("courses.department_id", programmeId);
+          query = query.eq("courses.programme_id", programmeId);
         }
         if (level) {
           query = query.eq("courses.level", parseInt(level));
@@ -200,20 +200,20 @@ export async function GET(req: NextRequest) {
 
         const deptIds = Array.from(
           new Set(
-            (questionsWithEmail as Array<{ courses?: { department_id: string } }>)
-              .map((q) => q.courses?.department_id)
+            (questionsWithEmail as Array<{ courses?: { programme_id: string } }>)
+              .map((q) => q.courses?.programme_id)
               .filter(Boolean),
           ),
         ) as string[];
         const { data: deptRows } = await service
-          .from("departments")
+          .from("programmes")
           .select("id, name")
           .in("id", deptIds.length > 0 ? deptIds : ["none"]);
-        const deptMap = new Map((deptRows ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
+        const programmeMap = new Map((deptRows ?? []).map((d: { id: string; name: string }) => [d.id, d.name]));
 
         const questionsWithProgramme = (questionsWithEmail as never as Array<Record<string, unknown>>).map((q) => {
           const course = q.courses as Record<string, unknown> | undefined;
-          const programmeName = course?.department_id ? deptMap.get(course.department_id as string) || "" : "";
+          const programmeName = course?.programme_id ? programmeMap.get(course.programme_id as string) || "" : "";
           return {
             ...q,
             programme_name: programmeName,
@@ -246,7 +246,7 @@ export async function GET(req: NextRequest) {
 
       case "programmes": {
         const { data: list } = await service
-          .from("departments")
+          .from("programmes")
           .select("id, name, faculty_id, faculties!inner(name)")
           .order("name") as never;
         const programmes = (list as unknown as { id: string; name: string; faculty_id: string; faculties: { name: string } }[] | null) ?? [];
@@ -257,7 +257,7 @@ export async function GET(req: NextRequest) {
 
       case "list-programmes": {
         const { data: programmeList } = await service
-          .from("departments")
+          .from("programmes")
           .select("id, name")
           .order("name");
         return NextResponse.json({ programmes: programmeList ?? [] });
@@ -456,7 +456,7 @@ export async function POST(req: NextRequest) {
         }
         const slug = name.toLowerCase().replace(/\s+/g, "-");
         const { error } = await service
-          .from("departments")
+          .from("programmes")
           .insert({ name, slug, faculty_id } as never);
         if (error) throw error;
         logger.info({ event: "admin.seed_programme", message: "Programme seeded", userId: user.id, metadata: { name, faculty_id } });
@@ -477,7 +477,7 @@ export async function POST(req: NextRequest) {
           );
         }
         const insertData: Record<string, unknown> = { code, title, level, scope };
-        if (programme_id) insertData.department_id = programme_id;
+        if (programme_id) insertData.programme_id = programme_id;
         const { data: newCourse, error } = await service
           .from("courses")
           .insert(insertData as never)
@@ -487,10 +487,10 @@ export async function POST(req: NextRequest) {
         const courseId = (newCourse as unknown as { id: string } | null)?.id;
         if (scope === "shared" && link_dept_ids.length > 0 && courseId) {
           const links = link_dept_ids.map((did: string) => ({
-            department_id: did,
+            programme_id: did,
             course_id: courseId,
           }));
-          await service.from("department_courses").insert(links as never);
+          await service.from("programme_courses").insert(links as never);
         }
         logger.info({ event: "admin.seed_course", message: "Course seeded", userId: user.id, metadata: { code, title } });
         return NextResponse.json({ success: true });
@@ -602,7 +602,7 @@ export async function POST(req: NextRequest) {
 
       case "list-programmes": {
         const { data: programmeList } = await service
-          .from("departments")
+          .from("programmes")
           .select("id, name")
           .order("name");
         return NextResponse.json({ programmes: programmeList ?? [] });
@@ -627,14 +627,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: createErr?.message || "Failed to create account" }, { status: 500 });
         }
 
-        const { data: programmeRow } = await service.from("departments").select("id").limit(1).maybeSingle();
+        const { data: programmeRow } = await service.from("programmes").select("id").limit(1).maybeSingle();
         const programmeId = programmeRow ? (programmeRow as unknown as { id: string }).id : null;
 
         await service.from("profiles").insert({
           auth_user_id: createdUser.user.id,
           full_name: inviteName,
           matric_number: `ADMIN${String(Math.floor(Math.random() * 9000) + 1000)}`,
-          department_id: programmeId || "",
+          programme_id: programmeId || "",
           current_level: 100,
           role: "super_admin",
         } as never);
@@ -684,32 +684,40 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
         }
         const { code, title, programme_id, programmeIds, level, scope = "departmental", standAlone = false } = body;
-        const selectedProgrammeIds = programmeIds?.filter((value): value is string => !!value) ?? (programme_id ? [programme_id] : []);
-        const effectiveScope = standAlone || scope === "general" ? "general" : scope;
+        const sharedProgrammeIds = programmeIds?.filter((value): value is string => !!value) ?? [];
+        const ownerProgrammeId = standAlone ? null : (programme_id || sharedProgrammeIds[0] || null);
+        const dbScope = standAlone
+          ? "general"
+          : scope === "programme_specific"
+            ? "departmental"
+            : scope || "departmental";
         const parsedLevel = typeof level === "number" ? level : Number(level);
         logger.info({
           event: "admin.create_course.payload",
           message: "Create course payload received",
           userId: user.id,
-          metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+          metadata: { code, title, level, parsedLevel, scope, dbScope, standAlone, programme_id, programmeIds, ownerProgrammeId },
         });
         if (!code || !title || Number.isNaN(parsedLevel)) {
           logger.warn({
             event: "admin.create_course.validation_failed",
             message: "Create course rejected because code/title/level were invalid",
             userId: user.id,
-            metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+            metadata: { code, title, level, parsedLevel, scope, dbScope, standAlone, programme_id, programmeIds, ownerProgrammeId },
           });
           return NextResponse.json({ error: "All fields are required" }, { status: 400 });
         }
-        if (effectiveScope !== "general" && selectedProgrammeIds.length === 0) {
+        if (!standAlone && !ownerProgrammeId) {
           logger.warn({
             event: "admin.create_course.validation_failed",
             message: "Create course rejected because no programme was provided for a non-general course",
             userId: user.id,
-            metadata: { code, title, level, parsedLevel, scope, effectiveScope, standAlone, programme_id, programmeIds, selectedProgrammeIds },
+            metadata: { code, title, level, parsedLevel, scope, dbScope, standAlone, programme_id, programmeIds, ownerProgrammeId },
           });
           return NextResponse.json({ error: "Select at least one programme" }, { status: 400 });
+        }
+        if (dbScope === "shared" && sharedProgrammeIds.length === 0) {
+          return NextResponse.json({ error: "Select at least one programme for shared scope" }, { status: 400 });
         }
         const { data: existing } = await service
           .from("courses")
@@ -725,18 +733,19 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
             code: code.toUpperCase(),
             title,
             level: parsedLevel,
-            scope: effectiveScope,
-            department_id: effectiveScope === "departmental" ? selectedProgrammeIds[0] : null,
+            scope: dbScope,
+            programme_id: ownerProgrammeId,
           } as never)
-          .select("id, code, title, level")
+          .select("id, code, title, level, scope")
           .single();
         if (error) throw error;
-        if ((effectiveScope === "shared" || effectiveScope === "general") && selectedProgrammeIds.length > 0) {
-          const links = selectedProgrammeIds.map((did) => ({
-            department_id: did,
+        if (dbScope === "shared" && sharedProgrammeIds.length > 0) {
+          const uniqueIds = Array.from(new Set(sharedProgrammeIds));
+          const links = uniqueIds.map((did) => ({
+            programme_id: did,
             course_id: (newCourse as { id: string }).id,
           }));
-          await service.from("department_courses").insert(links as never);
+          await service.from("programme_courses").insert(links as never);
         }
         logger.info({ event: "admin.create_course", message: "Course created", userId: user.id, metadata: { code, title } });
         return NextResponse.json({ course: newCourse });
@@ -747,12 +756,20 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const year = parseInt(formData.get("year") as string);
         const semester = formData.get("semester") as string;
         const exam_type = formData.get("exam_type") as string;
-        const level = parseInt(formData.get("level") as string);
         const file_url = formData.get("file_url") as string;
         const file_type = formData.get("file_type") as string;
         const question_id = formData.get("question_id") as string;
         if (!course_id || !year || !semester || !file_url || !file_type || !question_id) {
           return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+        const { data: rawCourse } = await service
+          .from("courses")
+          .select("level")
+          .eq("id", course_id)
+          .single();
+        const courseLevel = (rawCourse as unknown as { level: number } | null)?.level;
+        if (courseLevel == null) {
+          return NextResponse.json({ error: "Course not found" }, { status: 404 });
         }
         const { data: rawProfile } = await service
           .from("profiles")
@@ -768,7 +785,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           id: question_id,
           course_id,
           uploaded_by: profileId,
-          level,
+          level: courseLevel,
           file_url,
           file_type,
           year,
@@ -857,7 +874,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           }
           const facultyId = (facultyRow as unknown as { id: string }).id;
           const { data: existingProgramme } = await service
-            .from("departments")
+            .from("programmes")
             .select("id")
             .ilike("name", programmeName)
             .eq("faculty_id", facultyId)
@@ -868,7 +885,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           }
           const slug = programmeName.toLowerCase().replace(/\s+/g, "-");
           const { error: insertErr } = await service
-            .from("departments")
+            .from("programmes")
             .insert({ name: programmeName, slug, faculty_id: facultyId } as never);
           if (insertErr) {
             results2.errors.push({ row: i + 1, message: insertErr.message });
@@ -903,7 +920,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const slug = name.toLowerCase().replace(/\s+/g, "-");
         const updateData: Record<string, string> = { name, slug };
         if (faculty_id) updateData.faculty_id = faculty_id;
-        const { error } = await service.from("departments").update(updateData as never).eq("id", programme_id);
+        const { error } = await service.from("programmes").update(updateData as never).eq("id", programme_id);
         if (error) throw error;
         logger.info({ event: "admin.update_programme", message: "Programme updated", userId: user.id, metadata: { programme_id, name } });
         return NextResponse.json({ success: true });
@@ -957,7 +974,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         if (!faculty_id) {
           return NextResponse.json({ error: "ID required" }, { status: 400 });
         }
-        await service.from("departments").delete().eq("faculty_id", faculty_id);
+        await service.from("programmes").delete().eq("faculty_id", faculty_id);
         const { error } = await service.from("faculties").delete().eq("id", faculty_id);
         if (error) throw error;
         logger.info({ event: "admin.delete_faculty", message: "Faculty deleted", userId: user.id, metadata: { faculty_id } });
@@ -972,18 +989,18 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
         const { data: rawAdminProfile } = await service
           .from("profiles")
-          .select("department_id, role")
+          .select("programme_id, role")
           .eq("auth_user_id", user.id)
           .single();
-        const adminProfile = rawAdminProfile as unknown as { department_id: string; role: string } | null;
-        if (adminProfile?.department_id === programme_id) {
+        const adminProfile = rawAdminProfile as unknown as { programme_id: string; role: string } | null;
+        if (adminProfile?.programme_id === programme_id) {
           return NextResponse.json(
             { error: "Cannot delete the programme your account is attached to" },
             { status: 409 },
           );
         }
 
-        const { error } = await service.from("departments").delete().eq("id", programme_id);
+        const { error } = await service.from("programmes").delete().eq("id", programme_id);
         if (error) throw error;
         logger.info({ event: "admin.delete_programme", message: "Programme deleted", userId: user.id, metadata: { programme_id } });
         return NextResponse.json({ success: true });
@@ -1255,7 +1272,7 @@ Return JSON only.`;
           groups: Array<{
             pages: Array<{ stagedPath: string; fileType: string }>;
             courseId: string | null;
-            newCourse: { code: string; title: string; level: number; scope: string; departmentIds: string[] } | null;
+            newCourse: { code: string; title: string; level: number; scope: string; programmeIds: string[] } | null;
             year: number;
             semester: string;
             examType: string;
@@ -1284,7 +1301,7 @@ Return JSON only.`;
 
           try {
             if (!courseId && group.newCourse) {
-              const { code, title, level, scope, departmentIds } = group.newCourse;
+              const { code, title, level, scope, programmeIds } = group.newCourse;
               const { data: existing } = await service
                 .from("courses")
                 .select("id")
@@ -1299,8 +1316,8 @@ Return JSON only.`;
                   level,
                   scope,
                 };
-                if (scope === "departmental" && departmentIds.length > 0) {
-                  insertData.department_id = departmentIds[0];
+                if (scope === "departmental" && programmeIds.length > 0) {
+                  insertData.programme_id = programmeIds[0];
                 }
                 const { data: newCourseData, error: courseErr } = await service
                   .from("courses")
@@ -1315,12 +1332,12 @@ Return JSON only.`;
                 }
                 courseId = (newCourseData as unknown as { id: string }).id;
 
-                if ((scope === "shared" || scope === "general") && departmentIds.length > 0) {
-                  const links = departmentIds.map((did) => ({
-                    department_id: did,
+                if ((scope === "shared" || scope === "general") && programmeIds.length > 0) {
+                  const links = programmeIds.map((did) => ({
+                    programme_id: did,
                     course_id: courseId!,
                   }));
-                  await service.from("department_courses").insert(links as never);
+                  await service.from("programme_courses").insert(links as never);
                 }
               }
             }
@@ -1371,10 +1388,10 @@ Return JSON only.`;
 
             const { data: courseData } = await service
               .from("courses")
-              .select("department_id, scope")
+              .select("programme_id, scope")
               .eq("id", courseId)
               .single();
-            const course = courseData as unknown as { department_id: string | null; scope: string } | null;
+            const course = courseData as unknown as { programme_id: string | null; scope: string } | null;
 
             const { error: insertErr } = await service.from("past_questions").insert({
               id: questionId,
@@ -1388,7 +1405,7 @@ Return JSON only.`;
               exam_type: group.examType || "examination",
               status: "published",
               scope: group.newCourse?.scope || course?.scope || "departmental",
-              department_id: group.newCourse?.scope === "departmental" ? (group.newCourse.departmentIds?.[0] || null) : null,
+              programme_id: group.newCourse?.scope === "departmental" ? (group.newCourse.programmeIds?.[0] || null) : null,
             } as never);
             if (insertErr) {
               failed.push({ groupIndex: i, error: `Failed to insert question: ${insertErr.message}` });

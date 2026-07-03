@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     }
 
     const { data: programmeRow } = await supabase
-      .from("departments")
+      .from("programmes")
       .select("id")
       .limit(1)
       .single();
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
         auth_user_id: adminUser.id,
         full_name: fullName,
         matric_number: "ADMIN0001",
-        department_id: programmeId,
+        programme_id: programmeId,
         current_level: 100,
         role: "super_admin",
       } as never);

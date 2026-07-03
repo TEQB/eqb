@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       user_metadata: {
         full_name: reg.full_name,
         matric_number: reg.matric_number,
-        department_id: reg.department_id,
+        programme_id: reg.programme_id,
         current_level: reg.current_level,
       },
     });
