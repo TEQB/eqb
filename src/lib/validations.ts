@@ -66,6 +66,29 @@ export const solutionSchema = z.object({
   body: z.string().min(1, "Solution text is required").optional().or(z.literal("")),
 });
 
+export const verifyResetOtpSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+});
+
+export const completePasswordResetSchema = z
+  .object({
+    email: z.string().email(),
+    token: z.string().min(1, "Verification token is required"),
+    password: z.string().min(1, "Password is required"),
+    confirmPassword: z.string().min(1),
+  })
+  .superRefine((data, ctx) => {
+    const result = validatePassword(data.password, { email: data.email });
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error, path: ["password"] });
+    }
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
+
 export const sendOtpSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2).max(100).optional(),

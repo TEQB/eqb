@@ -173,6 +173,74 @@ type TouchState = {
   lastTouchY: number;
 };
 
+function ZoomableContainer({
+  children,
+  zoom,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
+  handlePointerDown,
+  handlePointerMove,
+  endPointerDrag,
+  handleWheel,
+  handleKeyDown,
+  shouldOpenFullscreenFromTap,
+  zoomTouchAction,
+  isFullscreenStage,
+}: {
+  children: React.ReactNode;
+  zoom: number;
+  handleTouchStart: (e: React.TouchEvent<HTMLElement>) => void;
+  handleTouchMove: (e: React.TouchEvent<HTMLElement>) => void;
+  handleTouchEnd: (e: React.TouchEvent<HTMLElement>) => void;
+  handlePointerDown: (e: React.PointerEvent<HTMLElement>) => void;
+  handlePointerMove: (e: React.PointerEvent<HTMLElement>) => void;
+  endPointerDrag: (e: React.PointerEvent<HTMLElement>) => void;
+  handleWheel: (e: React.WheelEvent<HTMLElement>) => void;
+  handleKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
+  shouldOpenFullscreenFromTap: (e: React.MouseEvent) => void;
+  zoomTouchAction: string;
+  isFullscreenStage: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.addEventListener("touchmove", handleTouchMove as unknown as EventListener, { passive: false });
+    el.addEventListener("wheel", handleWheel as unknown as EventListener, { passive: false });
+    return () => {
+      el.removeEventListener("touchmove", handleTouchMove as unknown as EventListener);
+      el.removeEventListener("wheel", handleWheel as unknown as EventListener);
+    };
+  }, [isFullscreenStage, handleTouchMove, handleWheel]);
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-center justify-center overflow-hidden ${
+        isFullscreenStage ? "min-h-[calc(100dvh-7rem)] flex-1 bg-black/95 p-4" : "p-3 sm:p-4"
+      } ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
+      style={{ touchAction: zoomTouchAction }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endPointerDrag}
+      onPointerCancel={endPointerDrag}
+      onKeyDown={handleKeyDown}
+      onClick={shouldOpenFullscreenFromTap}
+      role="button"
+      tabIndex={0}
+      aria-label="Tap to open full screen, drag to pan when zoomed"
+    >
+      <div className="flex items-center justify-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function ImageViewer({ src, alt }: ImageViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -426,39 +494,32 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   );
 
   const renderImage = (isFullscreenStage: boolean) => (
-    <div
-      className={`flex items-center justify-center overflow-hidden ${
-        isFullscreenStage ? "min-h-[calc(100dvh-7rem)] flex-1 bg-black/95 p-4" : "p-3 sm:p-4"
-      } ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"}`}
-      style={{ touchAction: zoomTouchAction }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={endPointerDrag}
-      onPointerCancel={endPointerDrag}
-      onWheel={handleWheel}
-      onKeyDown={handleKeyDown}
-      onClick={shouldOpenFullscreenFromTap}
-      role="button"
-      tabIndex={0}
-      aria-label="Tap to open full screen, drag to pan when zoomed"
+    <ZoomableContainer
+      zoom={zoom}
+      handleTouchStart={handleTouchStart}
+      handleTouchMove={handleTouchMove}
+      handleTouchEnd={handleTouchEnd}
+      handlePointerDown={handlePointerDown}
+      handlePointerMove={handlePointerMove}
+      endPointerDrag={endPointerDrag}
+      handleWheel={handleWheel}
+      handleKeyDown={handleKeyDown}
+      shouldOpenFullscreenFromTap={shouldOpenFullscreenFromTap}
+      zoomTouchAction={zoomTouchAction}
+      isFullscreenStage={isFullscreenStage}
     >
-      <div className="flex items-center justify-center">
-        <img
-          src={src}
-          alt={alt}
-          className={`select-none ${isFullscreenStage ? "max-h-[calc(100dvh-7rem)] max-w-full" : "w-full h-auto"}`}
-          style={{
-            transform: imageTransformSingle,
-            transformOrigin: "center center",
-            transition: "transform 0.2s ease-out",
-          }}
-          draggable={false}
-        />
-      </div>
-    </div>
+      <img
+        src={src}
+        alt={alt}
+        className={`select-none ${isFullscreenStage ? "max-h-[calc(100dvh-7rem)] max-w-full" : "w-full h-auto"}`}
+        style={{
+          transform: imageTransformSingle,
+          transformOrigin: "center center",
+          transition: "transform 0.2s ease-out",
+        }}
+        draggable={false}
+      />
+    </ZoomableContainer>
   );
 
   return (
@@ -496,7 +557,7 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
       <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
         <DialogContent
           showCloseButton={false}
-          className="flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none border-0 bg-black p-0 text-white"
+          className="fixed inset-0 flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none border-0 bg-black p-0 text-white"
         >
           <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-black/95 px-4 py-3 sm:px-5">
             <button

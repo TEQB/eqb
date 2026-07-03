@@ -71,7 +71,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white">
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white" suppressHydrationWarning>
         <AuthProvider>
           <Suspense fallback={null}>
             <ActivityTracker />

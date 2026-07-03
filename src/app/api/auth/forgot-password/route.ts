@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkDbRateLimit } from "@/lib/utils";
+import { checkDbRateLimit, hashOtp } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { sendEmail } from "@/lib/mailer";
-import { passwordResetTemplate } from "@/lib/email-templates";
+import { passwordResetOtpTemplate } from "@/lib/email-templates";
 import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 
 type ResetRole = "student" | "super_admin";
+
+function generateCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 export async function POST(req: NextRequest) {
   const start = Date.now();
@@ -19,10 +23,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const role = (body.role === "super_admin" ? "super_admin" : "student") as ResetRole;
-    const redirectTo =
-      typeof body.redirectTo === "string" && body.redirectTo.startsWith("http")
-        ? body.redirectTo
-        : `${new URL(req.url).origin}/${role === "super_admin" ? "admin" : "login"}`;
 
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -73,32 +73,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    const { data: linkData, error: linkErr } = await withAuthRetry(() =>
-      supabase.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: { redirectTo },
-      })
-    );
+    const code = generateCode();
+    const codeHash = hashOtp(code);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    if (linkErr) {
-      logger.error({ event: "forgot_password.generate_link_failed", message: "Failed to generate recovery link", ip, email, error: linkErr.message, metadata: { supabaseError: serializeAuthError(linkErr), role } });
+    const { error: dbError } = await supabase.from("password_reset_otps" as never).insert({
+      email,
+      code_hash: codeHash,
+      expires_at: expiresAt,
+    } as never);
 
-      if (isTransientAuthError(linkErr)) {
-        return NextResponse.json({ error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." }, { status: 503 });
-      }
-
-      return NextResponse.json({ error: "Could not generate reset link" }, { status: 500 });
-    }
-
-    const recoveryLink = linkData?.properties?.action_link;
-    if (!recoveryLink) {
-      logger.error({ event: "forgot_password.no_link", message: "No action_link in generateLink response", ip, email, metadata: { role } });
-      return NextResponse.json({ error: "Could not generate reset link" }, { status: 500 });
+    if (dbError) {
+      logger.error({ event: "forgot_password.db_error", message: "Failed to store password reset OTP", ip, email, error: dbError.message, metadata: { role } });
+      return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
     }
 
     try {
-      const { subject, html } = passwordResetTemplate(recoveryLink, role === "super_admin");
+      const { subject, html } = passwordResetOtpTemplate(code, role === "super_admin");
       await sendEmail(email, subject, html);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -106,7 +97,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
     }
 
-    logger.info({ event: "forgot_password.success", message: "Password reset email sent", ip, email, durationMs: Date.now() - start, metadata: { role } });
+    logger.info({ event: "forgot_password.success", message: "Password reset OTP sent", ip, email, durationMs: Date.now() - start, metadata: { role } });
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

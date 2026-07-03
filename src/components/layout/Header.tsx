@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState, useRef, useCallback } from "react";
 import { SearchBar } from "@/components/browse/SearchBar";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { Search, PanelLeftClose, PanelLeft, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -28,6 +31,21 @@ export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userNam
   const router = useRouter();
   const { signOut } = useAuth();
   const initial = userName?.charAt(0)?.toUpperCase() || "U";
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileQuery, setMobileQuery] = useState("");
+  const mobileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleMobileSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (mobileQuery.trim()) {
+        router.push(`/browse?q=${encodeURIComponent(mobileQuery.trim())}`);
+        setMobileSearchOpen(false);
+        setMobileQuery("");
+      }
+    },
+    [mobileQuery, router],
+  );
 
   const handleLogout = async () => {
     await signOut();
@@ -36,106 +54,147 @@ export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userNam
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-white/10 bg-primary px-3 text-primary-foreground shadow-[0_18px_45px_rgba(122,16,48,0.22)] backdrop-blur-xl lg:h-16 lg:gap-4 lg:px-4">
-      {onSidebarToggle && (
-        <button
-          type="button"
-          onClick={onSidebarToggle}
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30 lg:inline-flex"
-        >
-          {sidebarCollapsed ? (
-            <PanelLeft className="h-5 w-5" />
-          ) : (
-            <PanelLeftClose className="h-5 w-5" />
-          )}
-        </button>
-      )}
-
-      {onMenuClick && (
-        <button
-          type="button"
-          onClick={onMenuClick}
-          aria-label="Open menu"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30 lg:hidden"
-        >
-          <svg
-            className="h-5 w-5 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+    <>
+      <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-white/10 bg-primary px-3 text-primary-foreground shadow-[0_18px_45px_rgba(122,16,48,0.22)] backdrop-blur-xl lg:h-16 lg:gap-4 lg:px-4">
+        {onSidebarToggle && (
+          <button
+            type="button"
+            onClick={onSidebarToggle}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30 lg:inline-flex"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
-      )}
+            {sidebarCollapsed ? (
+              <PanelLeft className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </button>
+        )}
 
-      <Link href="/dashboard" className="flex items-center">
-  <Image 
-    src="/drklogo.png" 
-    alt="EQB logo" 
-    width={160} 
-    height={48} 
-    className="h-11 w-auto object-contain" 
-    priority 
-  />
-</Link>
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30 lg:hidden"
+          >
+            <svg
+              className="h-5 w-5 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        )}
 
-      <div className="hidden flex-1 lg:block">
-        <SearchBar />
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <Link
-          href="/feedback"
-          className="relative inline-flex h-9 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-sm font-medium text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30"
-        >
-          <span className="hidden sm:inline">Feedback</span>
-          <span className="sm:hidden">Msg</span>
-          {feedbackCount > 0 && (
-            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-white">
-              {feedbackCount > 9 ? "9+" : feedbackCount}
-            </span>
-          )}
+        <Link href="/dashboard" className="flex items-center">
+          <Image 
+            src="/drklogo.png" 
+            alt="EQB logo" 
+            width={160} 
+            height={48} 
+            className="h-11 w-auto object-contain" 
+            priority 
+          />
         </Link>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/15 text-sm font-medium text-white outline-none transition-transform hover:-translate-y-0.5 hover:bg-white/20 focus-visible:ring-4 focus-visible:ring-secondary/30">
-            {initial}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow-[0_10px_20px_rgba(122,16,48,0.2)]">
-                    {initial}
-                  </span>
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {userName || "User"}
-                  </span>
-                </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Link href="/profile" className="flex items-center gap-2">
-                <ProfileIcon />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void handleLogout()} className="flex items-center gap-2">
-              <LogoutIcon />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
+
+        <div className="hidden flex-1 lg:block">
+          <SearchBar />
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMobileSearchOpen(true);
+              setTimeout(() => mobileInputRef.current?.focus(), 100);
+            }}
+            aria-label="Search courses"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30 lg:hidden"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+
+          <Link
+            href="/feedback"
+            className="relative inline-flex h-9 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-sm font-medium text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-secondary/30"
+          >
+            <span className="hidden sm:inline">Feedback</span>
+            <span className="sm:hidden">Msg</span>
+            {feedbackCount > 0 && (
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {feedbackCount > 9 ? "9+" : feedbackCount}
+              </span>
+            )}
+          </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/15 text-sm font-medium text-white outline-none transition-transform hover:-translate-y-0.5 hover:bg-white/20 focus-visible:ring-4 focus-visible:ring-secondary/30">
+              {initial}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground shadow-[0_10px_20px_rgba(122,16,48,0.2)]">
+                      {initial}
+                    </span>
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {userName || "User"}
+                    </span>
+                  </div>
+                </DropdownMenuLabel>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Link href="/profile" className="flex items-center gap-2">
+                  <ProfileIcon />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void handleLogout()} className="flex items-center gap-2">
+                <LogoutIcon />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {mobileSearchOpen && (
+        <div className="sticky top-14 z-30 border-b border-white/10 bg-primary px-3 py-2 shadow-[0_18px_45px_rgba(122,16,48,0.22)] backdrop-blur-xl lg:hidden">
+          <form onSubmit={handleMobileSubmit} className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/65" />
+            <Input
+              ref={mobileInputRef}
+              type="text"
+              value={mobileQuery}
+              onChange={(e) => setMobileQuery(e.target.value)}
+              placeholder="Search courses..."
+              className={cn(
+                "h-10 w-full rounded-full border-white/20 bg-white/15 pl-10 pr-10 text-sm text-white placeholder:text-white/60 shadow-none backdrop-blur-md transition-all",
+                "focus-visible:bg-white/25 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-0",
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => { setMobileSearchOpen(false); setMobileQuery(""); }}
+              className="absolute inset-y-0 right-3 flex items-center text-white/60 transition-colors hover:text-white"
+              aria-label="Close search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
 

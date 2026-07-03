@@ -82,16 +82,15 @@ export function welcomeTemplate(name: string): { subject: string; html: string }
   return { subject: "Welcome to EQB \u2014 Your account is ready!", html: baseTemplate(content, footer) };
 }
 
-export function passwordResetTemplate(resetLink: string, isAdmin = false): { subject: string; html: string } {
-  const adminLabel = isAdmin ? " <strong>EQB admin</strong>" : "";
+export function passwordResetOtpTemplate(otp: string, isAdmin = false): { subject: string; html: string } {
+  const role = isAdmin ? "admin" : "student";
   const content = [
     '<h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:' + BRAND.darkText + ';">Password Reset Request</h2>',
-    '<p style="margin:0 0 20px;font-size:15px;color:' + BRAND.mutedText + ';line-height:1.65;">We received a request to reset the password for your' + adminLabel + " account. Click the button below to set a new password.</p>",
-    '<div style="text-align:center;margin:28px 0;">',
-    '  <a href="' + resetLink + '" style="display:inline-block;background-color:' + BRAND.crimson + ';color:#ffffff;font-size:15px;font-weight:600;padding:13px 32px;border-radius:8px;text-decoration:none;">Reset Password</a>',
+    '<p style="margin:0 0 8px;font-size:14px;color:' + BRAND.mutedText + ';">Use the code below to reset the password for your EQB <strong>' + role + '</strong> account:</p>',
+    '<div style="background-color:' + BRAND.cream + ';border-radius:10px;padding:20px;text-align:center;margin:24px 0;">',
+    '  <span style="font-size:36px;font-weight:800;color:' + BRAND.crimson + ';letter-spacing:12px;">' + otp + '</span>',
     "</div>",
-    '<p style="margin:0 0 12px;font-size:13px;color:' + BRAND.mutedText + ';line-height:1.6;">This link expires in <strong>24 hours</strong>. If you didn\'t request this, you can safely ignore this email and your password will remain unchanged.</p>',
-    '<p style="margin:0;font-size:12px;color:' + BRAND.mutedText + ';line-height:1.6;">If the button doesn\'t work, copy and paste this URL into your browser:<br/><a href="' + resetLink + '" style="color:' + BRAND.crimson + ';word-break:break-all;">' + resetLink + "</a></p>",
+    '<p style="margin:0;font-size:13px;color:' + BRAND.mutedText + ';line-height:1.6;">This code expires in <strong>10 minutes</strong>. If you didn\'t request this, you can safely ignore this email.</p>',
   ].join("");
   return {
     subject: isAdmin ? "Reset your EQB admin password" : "Reset your EQB password",
