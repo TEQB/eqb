@@ -674,7 +674,7 @@ export function BulkUploadStaging() {
           </div>
           {previewPage && (
             <Dialog open={!!previewPage} onOpenChange={(open) => !open && setPreviewPage(null)}>
-              <DialogContent className="relative max-w-[95vw] overflow-hidden border-gray-200 p-0">
+              <DialogContent className="relative max-w-[95vw] sm:max-w-none overflow-hidden border-gray-200 p-0">
                 <DialogHeader className="border-b border-gray-200 px-5 py-4">
                   <DialogTitle className="flex items-center justify-between gap-3 text-left">
                     <span>{previewPage?.title}</span>
@@ -706,7 +706,7 @@ export function BulkUploadStaging() {
       )}
 
       <Dialog open={missingCourseModal} onOpenChange={(open) => !open && closeMissingCourseModal()}>
-        <DialogContent className="max-w-2xl overflow-hidden">
+        <DialogContent className="max-w-2xl sm:max-w-none overflow-hidden">
           <DialogHeader>
             <DialogTitle>Course not found</DialogTitle>
           </DialogHeader>

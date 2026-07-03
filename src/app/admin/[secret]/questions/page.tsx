@@ -441,7 +441,7 @@ export default function AdminQuestionsPage({
       />
 
       <Dialog open={editingQuestion !== null} onOpenChange={(open) => !open && setEditingQuestion(null)}>
-        <DialogContent className="max-w-2xl overflow-hidden">
+        <DialogContent className="max-w-2xl sm:max-w-none overflow-hidden">
           <DialogHeader>
             <DialogTitle>Edit question details</DialogTitle>
           </DialogHeader>

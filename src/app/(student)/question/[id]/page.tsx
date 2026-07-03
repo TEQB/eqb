@@ -261,7 +261,7 @@ export default function QuestionPage({
 
       {/* Solutions Modal */}
       <Dialog open={showSolutionsModal} onOpenChange={setShowSolutionsModal}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl sm:max-w-none max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>All Solutions — {solutions.length}</DialogTitle>
           </DialogHeader>
