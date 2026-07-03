@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
-import { validatePassword } from "@/lib/validations";
+import { validatePassword } from "@/lib/password";
 import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
@@ -35,11 +35,16 @@ export async function POST(req: Request) {
 
     const supabase = createServiceClient();
 
-    const { data: reg } = await supabase
+    const { data: reg, error: regError } = await supabase
       .from("pending_registrations")
       .select("*")
       .eq("email", email)
       .single();
+
+    if (regError) {
+      logger.error({ event: "account.create.reg_fetch_error", message: "Failed to fetch pending registration", ip, email, error: regError.message });
+      return NextResponse.json({ error: "Failed to fetch registration data" }, { status: 500 });
+    }
 
     if (!reg) {
       logger.warn({ event: "account.create.no_pending", message: "No pending registration found", ip, email });
@@ -66,7 +71,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
     }
 
-    const { error: createError } = await supabase.auth.admin.createUser({
+    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: false,
@@ -79,7 +84,19 @@ export async function POST(req: Request) {
     });
 
     if (createError) {
-      logger.error({ event: "account.create.failed", message: "Failed to create account via Supabase admin", ip, email, error: createError.message });
+      logger.error({ 
+        event: "account.create.failed", 
+        message: "Failed to create account via Supabase admin", 
+        ip, 
+        email, 
+        error: createError.message,
+        metadata: { 
+          email,
+          hasPassword: !!password,
+          metadataFields: Object.keys(reg),
+          supabaseError: JSON.stringify(createError)
+        }
+      });
       return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
     }
 

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
-import { getPasswordStrength, validatePassword } from "@/lib/validations";
+import { getPasswordStrength, validatePassword } from "@/lib/password";
 
 const STRENGTH_STYLES = {
   weak: "bg-danger-500",

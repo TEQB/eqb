@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
-import { validatePassword } from "@/lib/validations";
+import { validatePassword } from "@/lib/password";
 import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: createError } = await supabase.auth.admin.createUser({
+    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -85,7 +85,18 @@ export async function POST(req: Request) {
     });
 
     if (createError) {
-      logger.error({ event: "admin.create.user_failed", message: "Supabase admin user creation failed", ip, email, error: createError.message });
+      logger.error({ 
+        event: "admin.create.user_failed", 
+        message: "Supabase admin user creation failed", 
+        ip, 
+        email, 
+        error: createError.message,
+        metadata: {
+          supabaseError: JSON.stringify(createError),
+          email,
+          hasPassword: !!password
+        }
+      });
       return NextResponse.json(
         { error: "Failed to create admin account" },
         { status: 500 },

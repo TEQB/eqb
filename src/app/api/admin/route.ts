@@ -616,15 +616,50 @@ export async function POST(req: NextRequest) {
         }
 
         const tempPassword = crypto.randomUUID() + "Aa1!";
-        const { data: createdUser, error: createErr } = await service.auth.admin.createUser({
-          email: inviteEmail,
-          password: tempPassword,
-          email_confirm: true,
-        });
+        let createdUser, createErr;
+        
+        // Retry logic for Supabase Auth API transient errors
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          const result = await service.auth.admin.createUser({
+            email: inviteEmail,
+            password: tempPassword,
+            email_confirm: true,
+          });
+          createdUser = result.data;
+          createErr = result.error;
+          
+          if (!createErr) break;
+          
+          // If it's a retryable error (500), wait and retry
+          if (createErr.status === 500 && attempt < 3) {
+            logger.warn({ 
+              event: "admin.invite.retry", 
+              message: "Retrying admin creation due to Supabase error", 
+              userId: user.id, 
+              metadata: { 
+                email: inviteEmail, 
+                attempt,
+                error: createErr?.message
+              }
+            });
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
+          } else {
+            break; // Non-retryable error or max attempts reached
+          }
+        }
 
         if (createErr || !createdUser?.user) {
-          logger.error({ event: "admin.invite.create_failed", message: "Failed to create user", userId: user.id, metadata: { email: inviteEmail, error: createErr?.message } });
-          return NextResponse.json({ error: createErr?.message || "Failed to create account" }, { status: 500 });
+          logger.error({ 
+            event: "admin.invite.create_failed", 
+            message: "Failed to create user after retries", 
+            userId: user.id, 
+            metadata: { 
+              email: inviteEmail, 
+              error: createErr?.message,
+              supabaseError: createErr ? JSON.stringify(createErr) : null
+            }
+          });
+          return NextResponse.json({ error: createErr?.message || "Failed to create account. Please try again." }, { status: 500 });
         }
 
         const { data: programmeRow } = await service.from("programmes").select("id").limit(1).maybeSingle();

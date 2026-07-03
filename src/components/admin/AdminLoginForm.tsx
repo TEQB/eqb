@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { validatePassword } from "@/lib/validations";
+import { validatePassword } from "@/lib/password";
 import { toast } from "@/components/ui/toaster";
 
 export function AdminLoginForm({ secret }: { secret: string }) {
