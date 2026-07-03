@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import "./globals.css";
 import { validateEnv } from "@/lib/env";
 import { Toaster } from "@/components/ui/toaster";
 import { ActivityTracker } from "@/components/activity/ActivityTracker";
+
+const SessionManager = dynamic(
+  () => import("@/components/auth/SessionManager").then((mod) => mod.SessionManager),
+  { ssr: false },
+);
 
 // Fail fast at build time if env vars are missing
 if (typeof window === "undefined") {
@@ -67,6 +73,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white">
         <Suspense fallback={null}>
           <ActivityTracker />
+          <SessionManager />
         </Suspense>
         {children}
         <Toaster />
