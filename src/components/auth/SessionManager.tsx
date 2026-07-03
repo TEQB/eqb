@@ -28,8 +28,9 @@ export function SessionManager() {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
-      if (event === "AUTH_SESSION_MISSING") {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      const eventStr = event as string;
+      if (eventStr === "AUTH_SESSION_MISSING" || eventStr === "SIGNED_OUT") {
         handleSessionExpired();
       }
     });
