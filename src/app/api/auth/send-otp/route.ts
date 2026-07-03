@@ -78,7 +78,7 @@ export async function POST(req: Request) {
         email,
         full_name: fullName,
         matric_number: matricNumber,
-        department_id: programmeId,
+        programme_id: programmeId,
         current_level: currentLevel,
       });
     }

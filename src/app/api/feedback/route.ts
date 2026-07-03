@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     const service = createServiceClient();
     const { data: rawProfile } = await service
       .from("profiles" as never)
-      .select("id, full_name, programme:department_id(name)")
+      .select("id, full_name, programme:programme_id(name)")
       .eq("auth_user_id", user.id)
       .maybeSingle();
     const profile = rawProfile as unknown as {

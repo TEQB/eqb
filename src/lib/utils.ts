@@ -111,6 +111,14 @@ export function sanitizeHtml(input: string): string {
     .replace(/'/g, "&#x27;");
 }
 
+export function deriveLevelAndSemesterFromCode(code: string): { level: number; semester: "first" | "second" } | null {
+  const digits = code.replace(/\D/g, "");
+  if (digits.length < 3) return null;
+  const level = Number(digits[0]) * 100;
+  const semester = Number(digits[digits.length - 1]) % 2 === 0 ? "second" : "first";
+  return { level, semester };
+}
+
 const SEMESTERS = ["first", "second"] as const;
 export function isValidSemester(value: string): value is "first" | "second" {
   return SEMESTERS.includes(value as typeof SEMESTERS[number]);

@@ -26,7 +26,7 @@ export default async function DashboardPage({
 
   const courseGroups = await loadStudentCourseGroups(
     supabase,
-    profile.department_id,
+    profile.programme_id,
   );
   const questionCounts = await loadPublishedQuestionCounts(
     supabase,

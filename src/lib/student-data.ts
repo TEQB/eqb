@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { createServiceClient } from "@/lib/supabase/service";
 
 type Client = SupabaseClient<Database>;
 
@@ -16,7 +17,7 @@ export interface StudentProfile {
   auth_user_id: string;
   full_name: string;
   matric_number: string;
-  department_id: string;
+  programme_id: string;
   current_level: number;
   role: string;
   last_upload_at: string | null;
@@ -31,7 +32,7 @@ export interface StudentCourse {
   title: string;
   level: number;
   scope: StudentCourseScope;
-  department_id: string;
+  programme_id: string;
 }
 
 export interface StudentCourseGroups {
@@ -46,40 +47,47 @@ export async function loadStudentProfile(
 ): Promise<StudentProfile | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("*, programme:department_id(id, name, available_levels)")
+    .select("*, programme:programme_id(id, name, available_levels)")
     .eq("auth_user_id", userId)
     .single();
 
   return (data as unknown as StudentProfile | null) ?? null;
 }
 
-export async function loadStudentCourseGroups(
+export async function loadCoursesForProgramme(
   supabase: Client,
   programmeId: string,
-): Promise<StudentCourseGroups> {
-  const [rawOwnCourses, rawDeptLinks] = await Promise.all([
+): Promise<StudentCourse[]> {
+  const [rawOwnCourses, rawProgrammeLinks] = await Promise.all([
     supabase
       .from("courses")
-      .select("id, code, title, level, scope, department_id")
-      .or(`scope.eq.general,department_id.eq.${programmeId}`)
+      .select("id, code, title, level, scope, programme_id")
+      .or(`scope.eq.general,programme_id.eq.${programmeId}`)
       .order("level"),
     supabase
-      .from("department_courses")
-      .select("course_id, course:course_id(id, code, title, level, scope, department_id)")
-      .eq("department_id", programmeId),
+      .from("programme_courses")
+      .select("course_id, course:course_id(id, code, title, level, scope, programme_id)")
+      .eq("programme_id", programmeId),
   ]);
 
   const ownCourses = rawOwnCourses.data as unknown as StudentCourse[] | null;
-  const deptLinks = rawDeptLinks.data as unknown as Array<{
+  const programmeLinks = rawProgrammeLinks.data as unknown as Array<{
     course_id: string;
     course: StudentCourse;
   }> | null;
 
-  const linkedIds = new Set(deptLinks?.map((l) => l.course_id) || []);
-  const allCourses = [
+  const linkedIds = new Set(programmeLinks?.map((l) => l.course_id) || []);
+  return [
     ...(ownCourses || []).filter((c) => !linkedIds.has(c.id)),
-    ...(deptLinks || []).map((l) => l.course),
+    ...(programmeLinks || []).map((l) => l.course),
   ].sort((a, b) => a.level - b.level);
+}
+
+export async function loadStudentCourseGroups(
+  supabase: Client,
+  programmeId: string,
+): Promise<StudentCourseGroups> {
+  const allCourses = await loadCoursesForProgramme(supabase, programmeId);
 
   return {
     allCourses,
@@ -99,6 +107,32 @@ export async function loadUploadObligationDays(
 
   return (data as unknown as { upload_obligation_days: number } | null)
     ?.upload_obligation_days ?? fallbackDays;
+}
+
+export async function loadJoinableSharedCourses(
+  programmeId: string,
+): Promise<StudentCourse[]> {
+  const service = createServiceClient();
+  const [{ data: sharedCourses }, { data: linkedRows }] = await Promise.all([
+    service
+      .from("courses")
+      .select("id, code, title, level, scope, programme_id")
+      .eq("scope", "shared"),
+    service
+      .from("programme_courses")
+      .select("course_id")
+      .eq("programme_id", programmeId),
+  ]);
+
+  const linkedIds = new Set(
+    (linkedRows as unknown as Array<{ course_id: string }> | null)?.map((r) => r.course_id) ?? [],
+  );
+
+  return (
+    (sharedCourses as unknown as StudentCourse[] | null) ?? []
+  ).filter(
+    (c) => c.programme_id !== programmeId && !linkedIds.has(c.id),
+  );
 }
 
 export async function loadPublishedQuestionCounts(

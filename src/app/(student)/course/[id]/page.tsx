@@ -20,7 +20,7 @@ export default async function CoursePage({
 
   const { data: rawCourse } = await supabase
     .from("courses")
-    .select("*, programme:department_id(name)")
+    .select("*, programme:programme_id(name)")
     .eq("id", params.id)
     .single();
   const course = rawCourse as unknown as {
@@ -29,7 +29,7 @@ export default async function CoursePage({
     title: string;
     level: number;
     scope: string;
-    department_id: string;
+    programme_id: string;
     programme: { name: string } | null;
   } | null;
 

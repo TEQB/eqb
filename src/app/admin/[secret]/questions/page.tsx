@@ -24,7 +24,7 @@ interface Question {
     code: string;
     title: string;
     level: number;
-    department_id: string;
+    programme_id: string;
     programme: { name: string };
   } | null;
   profiles: { full_name: string; auth_user_id?: string } | null;
@@ -320,13 +320,13 @@ export default function AdminQuestionsPage({
                     <div className="space-y-1">
                       <p className="font-medium text-gray-900">{q.courses?.title || "-"}</p>
                       <span className="inline-flex rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
-                        {q.programme_name || q.courses?.programme?.name || (q.courses?.department_id ? "Unknown programme" : "General")}
+                        {q.programme_name || q.courses?.programme?.name || (q.courses?.programme_id ? "Unknown programme" : "General")}
                       </span>
                     </div>
                   </td>
                   <td className="px-5 py-4 text-gray-700">
                     <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                      {q.programme_name || q.courses?.programme?.name || (q.courses?.department_id ? "Unknown" : "General")}
+                      {q.programme_name || q.courses?.programme?.name || (q.courses?.programme_id ? "Unknown" : "General")}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-gray-700">

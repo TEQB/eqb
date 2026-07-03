@@ -67,7 +67,7 @@ export default async function AdminFeedbackPage({
   if (profileIds.length > 0) {
     const { data } = await service
       .from("profiles")
-      .select("id, full_name, matric_number, current_level, programme:department_id(name)")
+      .select("id, full_name, matric_number, current_level, programme:programme_id(name)")
       .in("id", profileIds);
     profileRows = (data as unknown[] | null) ?? [];
   }

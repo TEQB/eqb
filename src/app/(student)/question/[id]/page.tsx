@@ -60,7 +60,7 @@ interface Question {
   courses: {
     code: string;
     title: string;
-    department_id: string;
+    programme_id: string;
     scope: string;
   } | null;
 }
@@ -94,7 +94,7 @@ export default function QuestionPage({
           .select(
             `
             *,
-            courses(code, title, department_id, scope)
+            courses(code, title, programme_id, scope)
           `,
           )
           .eq("id", params.id)

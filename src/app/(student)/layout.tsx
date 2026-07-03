@@ -25,7 +25,7 @@ export default async function StudentLayout({
 
   const prog = profile.programme;
   const [courseGroups, obligationDays] = await Promise.all([
-    loadStudentCourseGroups(supabase, profile.department_id),
+    loadStudentCourseGroups(supabase, profile.programme_id),
     loadUploadObligationDays(supabase),
   ]);
   const feedbackCount = await loadStudentFeedbackCount(supabase, profile.id);
@@ -40,7 +40,7 @@ export default async function StudentLayout({
       profile={{
         id: profile.id,
         fullName: profile.full_name,
-        programmeId: profile.department_id,
+        programmeId: profile.programme_id,
         currentLevel: profile.current_level,
         isLocked: profile.is_locked,
         daysRemaining,
