@@ -153,7 +153,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-lg space-y-5">
+    <div className="max-w-lg space-y-5">
       <div>
         <label className="block text-sm font-medium text-gray-700">Course</label>
         {showAddCourse ? (
@@ -177,7 +177,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
             } else {
               setCourseId(e.target.value);
             }
-          }} required
+          }} 
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100">
             <option value="">Select course</option>
             {courses.map((c) => (
@@ -188,6 +188,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
         )}
       </div>
 
+      <form onSubmit={handleSubmit} className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">Session</label>
@@ -277,6 +278,7 @@ export function AdminUploadForm({ secret: _secret }: { secret: string }) {
           {message}
         </div>
       )}
-    </form>
+      </form>
+    </div>
   );
 }

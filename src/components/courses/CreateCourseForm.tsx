@@ -79,8 +79,7 @@ export function CreateCourseForm({
     }
   }, [code]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setError("");
 
     if (!code.trim() || !title.trim()) {
@@ -167,7 +166,7 @@ export function CreateCourseForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <h4 className="text-sm font-semibold text-gray-900">{heading}</h4>
 
       <div className="space-y-3">
@@ -177,7 +176,6 @@ export function CreateCourseForm({
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            required
             placeholder="e.g. CSC301"
             className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
           />
@@ -189,7 +187,6 @@ export function CreateCourseForm({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            required
             placeholder="e.g. Introduction to Programming"
             className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
           />
@@ -292,7 +289,8 @@ export function CreateCourseForm({
 
         <div className="flex gap-2">
           <button
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             disabled={loading}
             className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
           >
@@ -310,7 +308,7 @@ export function CreateCourseForm({
           </button>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
 
