@@ -3,9 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { SearchBar } from "@/components/browse/SearchBar";
-import { markVoluntaryLogout } from "@/lib/auth-session";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,12 +26,11 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userName, feedbackCount = 0 }: HeaderProps) {
   const router = useRouter();
-  const supabase = createClient();
+  const { signOut } = useAuth();
   const initial = userName?.charAt(0)?.toUpperCase() || "U";
 
   const handleLogout = async () => {
-    markVoluntaryLogout();
-    await supabase.auth.signOut();
+    await signOut();
     router.push("/login");
     router.refresh();
   };

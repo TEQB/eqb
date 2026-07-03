@@ -6,6 +6,7 @@ import "./globals.css";
 import { validateEnv } from "@/lib/env";
 import { Toaster } from "@/components/ui/toaster";
 import { ActivityTracker } from "@/components/activity/ActivityTracker";
+import { AuthProvider } from "@/lib/auth-context";
 
 const SessionManager = dynamic(
   () => import("@/components/auth/SessionManager").then((mod) => mod.SessionManager),
@@ -71,12 +72,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white">
-        <Suspense fallback={null}>
-          <ActivityTracker />
-          <SessionManager />
-        </Suspense>
-        {children}
-        <Toaster />
+        <AuthProvider>
+          <Suspense fallback={null}>
+            <ActivityTracker />
+            <SessionManager />
+          </Suspense>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

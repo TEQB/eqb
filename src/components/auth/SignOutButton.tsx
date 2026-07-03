@@ -1,8 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { markVoluntaryLogout } from "@/lib/auth-session";
+import { useAuth } from "@/lib/auth-context";
 
 interface SignOutButtonProps {
   redirectTo?: string;
@@ -12,11 +11,10 @@ interface SignOutButtonProps {
 
 export function SignOutButton({ redirectTo = "/login", className, children }: SignOutButtonProps) {
   const router = useRouter();
-  const supabase = createClient();
+  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
-    markVoluntaryLogout();
-    await supabase.auth.signOut();
+    await signOut();
     router.push(redirectTo);
     router.refresh();
   };
