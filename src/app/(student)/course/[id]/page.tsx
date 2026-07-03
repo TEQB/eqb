@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { LoadMoreQuestions } from "@/components/question/LoadMoreQuestions";
 import { QuestionFilters } from "@/components/question/QuestionFilters";
+import { LeaveSharedCourse } from "@/components/courses/LeaveSharedCourse";
 
 export default async function CoursePage({
   params,
@@ -18,12 +20,19 @@ export default async function CoursePage({
 
   if (!user) redirect("/login");
 
-  const { data: rawCourse } = await supabase
-    .from("courses")
-    .select("*, programme:programme_id(name)")
-    .eq("id", params.id)
-    .single();
-  const course = rawCourse as unknown as {
+  const [rawCourse, profileResult] = await Promise.all([
+    supabase
+      .from("courses")
+      .select("*, programme:programme_id(name)")
+      .eq("id", params.id)
+      .single(),
+    supabase
+      .from("profiles")
+      .select("programme_id, programme:programme_id(name)")
+      .eq("auth_user_id", user.id)
+      .single(),
+  ]);
+  const course = rawCourse.data as unknown as {
     id: string;
     code: string;
     title: string;
@@ -32,9 +41,35 @@ export default async function CoursePage({
     programme_id: string;
     programme: { name: string } | null;
   } | null;
+  const profile = profileResult.data as unknown as {
+    programme_id: string;
+    programme: { name: string } | null;
+  } | null;
 
   if (!course) {
     redirect("/dashboard");
+  }
+
+  const programmeName =
+    typeof course.programme === "object" && course.programme !== null
+      ? (course.programme as { name: string }).name
+      : "";
+
+  const studentProgrammeName =
+    profile?.programme && typeof profile.programme === "object"
+      ? (profile.programme as { name: string }).name
+      : null;
+
+  let isLinkedShared = false;
+  if (course.scope === "shared" && profile?.programme_id && course.programme_id !== profile.programme_id) {
+    const service = createServiceClient();
+    const { data: link } = await service
+      .from("programme_courses")
+      .select("course_id")
+      .eq("course_id", course.id)
+      .eq("programme_id", profile.programme_id)
+      .maybeSingle();
+    isLinkedShared = !!link;
   }
 
   let questionsQuery = supabase
@@ -53,11 +88,6 @@ export default async function CoursePage({
 
   const { data: questions } = await questionsQuery;
 
-  const programmeName =
-    typeof course.programme === "object" && course.programme !== null
-      ? (course.programme as { name: string }).name
-      : "";
-
   return (
     <div className="space-y-6">
       <div className="animate-fade-in-down">
@@ -75,6 +105,15 @@ export default async function CoursePage({
           {questions?.length || 0} past question
           {questions?.length !== 1 ? "s" : ""}
         </p>
+        {isLinkedShared && studentProgrammeName && (
+          <div className="mt-3">
+            <LeaveSharedCourse
+              courseId={course.id}
+              courseCode={course.code}
+              programmeName={studentProgrammeName}
+            />
+          </div>
+        )}
       </div>
 
       <div className="animate-fade-in-up stagger-1 flex items-center gap-4">

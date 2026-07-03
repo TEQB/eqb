@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
 import { queryLogs, getLogStats } from "@/lib/db-logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -261,6 +262,14 @@ export async function GET(req: NextRequest) {
           .select("id, name")
           .order("name");
         return NextResponse.json({ programmes: programmeList ?? [] });
+      }
+
+      case "list-courses": {
+        const { data: courses } = await service
+          .from("courses")
+          .select("id, code, title, level, scope, programme_id, programme_courses(programme_id, programmes!inner(id, name))")
+          .order("code");
+        return NextResponse.json({ courses: courses ?? [] });
       }
 
       case "list-admins": {
@@ -616,49 +625,33 @@ export async function POST(req: NextRequest) {
         }
 
         const tempPassword = crypto.randomUUID() + "Aa1!";
-        let createdUser, createErr;
         
-        // Retry logic for Supabase Auth API transient errors
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const result = await service.auth.admin.createUser({
+        const { data: createdUser, error: createErr } = await withAuthRetry(() =>
+          service.auth.admin.createUser({
             email: inviteEmail,
             password: tempPassword,
             email_confirm: true,
-          });
-          createdUser = result.data;
-          createErr = result.error;
-          
-          if (!createErr) break;
-          
-          // If it's a retryable error (500), wait and retry
-          if (createErr.status === 500 && attempt < 3) {
-            logger.warn({ 
-              event: "admin.invite.retry", 
-              message: "Retrying admin creation due to Supabase error", 
-              userId: user.id, 
-              metadata: { 
-                email: inviteEmail, 
-                attempt,
-                error: createErr?.message
-              }
-            });
-            await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
-          } else {
-            break; // Non-retryable error or max attempts reached
-          }
-        }
+          })
+        );
 
         if (createErr || !createdUser?.user) {
           logger.error({ 
             event: "admin.invite.create_failed", 
-            message: "Failed to create user after retries", 
+            message: "Failed to create user", 
             userId: user.id, 
             metadata: { 
               email: inviteEmail, 
               error: createErr?.message,
-              supabaseError: createErr ? JSON.stringify(createErr) : null
+              supabaseError: serializeAuthError(createErr)
             }
           });
+          
+          if (isTransientAuthError(createErr)) {
+            return NextResponse.json({ 
+              error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." 
+            }, { status: 503 });
+          }
+          
           return NextResponse.json({ error: createErr?.message || "Failed to create account. Please try again." }, { status: 500 });
         }
 
@@ -689,7 +682,7 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "EQB <noreply@devalyze.space>",
+            from: process.env.RESEND_FROM_EMAIL || "EQB <noreply@devalyze.space>",
             to: inviteEmail,
             subject: "You've been invited as an admin on EQB",
             html: `<h2>Admin Invitation</h2>
@@ -976,6 +969,49 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         } as never).eq("id", course_id);
         if (error) throw error;
         logger.info({ event: "admin.update_course", message: "Course updated", userId: user.id, metadata: { course_id, code, title } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "update-course-scope": {
+        const scopeCourseId = jsonBody?.course_id as string;
+        const newScope = jsonBody?.scope as string;
+        if (!scopeCourseId || !newScope || !["departmental", "shared", "general"].includes(newScope)) {
+          return NextResponse.json({ error: "course_id and valid scope required" }, { status: 400 });
+        }
+        const { error: scopeErr } = await service.from("courses").update({ scope: newScope } as never).eq("id", scopeCourseId);
+        if (scopeErr) throw scopeErr;
+        logger.info({ event: "admin.update_course_scope", message: "Course scope updated", userId: user.id, metadata: { course_id: scopeCourseId, scope: newScope } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "add-programme-course": {
+        const pcCourseId = jsonBody?.course_id as string;
+        const pcProgrammeId = jsonBody?.programme_id as string;
+        if (!pcCourseId || !pcProgrammeId) {
+          return NextResponse.json({ error: "course_id and programme_id required" }, { status: 400 });
+        }
+        const { error: addErr } = await service.from("programme_courses").insert({
+          programme_id: pcProgrammeId,
+          course_id: pcCourseId,
+        } as never);
+        if (addErr) throw addErr;
+        logger.info({ event: "admin.add_programme_course", message: "Programme added to course", userId: user.id, metadata: { course_id: pcCourseId, programme_id: pcProgrammeId } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "remove-programme-course": {
+        const rmCourseId = jsonBody?.course_id as string;
+        const rmProgrammeId = jsonBody?.programme_id as string;
+        if (!rmCourseId || !rmProgrammeId) {
+          return NextResponse.json({ error: "course_id and programme_id required" }, { status: 400 });
+        }
+        const { error: rmErr } = await service
+          .from("programme_courses")
+          .delete()
+          .eq("course_id", rmCourseId)
+          .eq("programme_id", rmProgrammeId);
+        if (rmErr) throw rmErr;
+        logger.info({ event: "admin.remove_programme_course", message: "Programme removed from course", userId: user.id, metadata: { course_id: rmCourseId, programme_id: rmProgrammeId } });
         return NextResponse.json({ success: true });
       }
 

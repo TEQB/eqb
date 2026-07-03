@@ -4,6 +4,7 @@ import { checkDbRateLimit } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { sendEmail } from "@/lib/mailer";
 import { passwordResetTemplate } from "@/lib/email-templates";
+import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 
 type ResetRole = "student" | "super_admin";
 
@@ -37,7 +38,20 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createServiceClient();
-    const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    const { data: authUsers, error: listErr } = await withAuthRetry(() =>
+      supabase.auth.admin.listUsers({ perPage: 1000 })
+    );
+
+    if (listErr) {
+      logger.error({ event: "forgot_password.list_users_failed", message: "Failed to list auth users", ip, email, error: listErr.message, metadata: { supabaseError: serializeAuthError(listErr), role } });
+
+      if (isTransientAuthError(listErr)) {
+        return NextResponse.json({ error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." }, { status: 503 });
+      }
+
+      return NextResponse.json({ error: "Could not verify account" }, { status: 500 });
+    }
+
     const authUser = authUsers?.users?.find(
       (user) => user.email?.toLowerCase() === email.toLowerCase(),
     );
@@ -59,14 +73,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo },
-    });
+    const { data: linkData, error: linkErr } = await withAuthRetry(() =>
+      supabase.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo },
+      })
+    );
 
     if (linkErr) {
-      logger.error({ event: "forgot_password.generate_link_failed", message: "Failed to generate recovery link", ip, email, error: linkErr.message, metadata: { role } });
+      logger.error({ event: "forgot_password.generate_link_failed", message: "Failed to generate recovery link", ip, email, error: linkErr.message, metadata: { supabaseError: serializeAuthError(linkErr), role } });
+
+      if (isTransientAuthError(linkErr)) {
+        return NextResponse.json({ error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." }, { status: 503 });
+      }
+
       return NextResponse.json({ error: "Could not generate reset link" }, { status: 500 });
     }
 

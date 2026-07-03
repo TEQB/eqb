@@ -2,8 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CourseGrid } from "@/components/browse/CourseGrid";
 import { JoinSharedCourse } from "@/components/courses/JoinSharedCourse";
+import { LeaveSharedCourse } from "@/components/courses/LeaveSharedCourse";
 import {
   loadJoinableSharedCourses,
+  loadLinkedSharedCourseIds,
   loadPublishedQuestionCounts,
   loadStudentCourseGroups,
   loadStudentProfile,
@@ -25,9 +27,10 @@ export default async function BrowsePage({
 
   const search = (searchParams.q || "").toLowerCase();
 
-  const [courseGroups, joinableSharedCourses] = await Promise.all([
+  const [courseGroups, joinableSharedCourses, linkedSharedIds] = await Promise.all([
     loadStudentCourseGroups(supabase, profile.programme_id),
     loadJoinableSharedCourses(profile.programme_id),
+    loadLinkedSharedCourseIds(profile.programme_id),
   ]);
 
   const questionCounts = await loadPublishedQuestionCounts(
@@ -83,6 +86,38 @@ export default async function BrowsePage({
           </div>
         )}
       </div>
+
+      {linkedSharedIds.size > 0 && (() => {
+        const linkedShared = courses.filter((c) => linkedSharedIds.has(c.id));
+        if (linkedShared.length === 0) return null;
+        return (
+          <div className="space-y-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
+            <h3 className="text-lg font-semibold text-primary">Linked Shared Courses</h3>
+            <p className="text-sm text-gray-500">
+              Your programme is linked to these shared courses. You can leave them at any time.
+            </p>
+            <ul className="space-y-3">
+              {linkedShared.map((course) => (
+                <li
+                  key={course.id}
+                  className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-mono text-sm font-medium text-gray-900">{course.code}</p>
+                    <p className="text-sm text-gray-600">{course.title}</p>
+                    <p className="text-xs text-gray-400">Level {course.level}</p>
+                  </div>
+                  <LeaveSharedCourse
+                    courseId={course.id}
+                    courseCode={course.code}
+                    programmeName={programmeName}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {joinable.length > 0 && (
         <div className="space-y-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">

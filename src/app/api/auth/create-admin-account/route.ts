@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { validatePassword } from "@/lib/password";
 import { logger } from "@/lib/logger";
+import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -77,12 +78,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
+    const { data: userData, error: createError } = await withAuthRetry(() =>
+      supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      })
+    );
 
     if (createError) {
       logger.error({ 
@@ -92,11 +95,18 @@ export async function POST(req: Request) {
         email, 
         error: createError.message,
         metadata: {
-          supabaseError: JSON.stringify(createError),
+          supabaseError: serializeAuthError(createError),
           email,
           hasPassword: !!password
         }
       });
+      
+      if (isTransientAuthError(createError)) {
+        return NextResponse.json({ 
+          error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." 
+        }, { status: 503 });
+      }
+      
       return NextResponse.json(
         { error: "Failed to create admin account" },
         { status: 500 },

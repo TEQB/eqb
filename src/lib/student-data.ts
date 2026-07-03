@@ -135,6 +135,27 @@ export async function loadJoinableSharedCourses(
   );
 }
 
+export async function loadLinkedSharedCourseIds(
+  programmeId: string,
+): Promise<Set<string>> {
+  const service = createServiceClient();
+  const { data: linkedRows } = await service
+    .from("programme_courses")
+    .select("course_id, course:course_id!inner(scope, programme_id)")
+    .eq("programme_id", programmeId);
+
+  const links = linkedRows as unknown as Array<{
+    course_id: string;
+    course: { scope: string; programme_id: string };
+  }> | null;
+
+  return new Set(
+    (links || [])
+      .filter((l) => l.course.scope === "shared" && l.course.programme_id !== programmeId)
+      .map((l) => l.course_id),
+  );
+}
+
 export async function loadPublishedQuestionCounts(
   supabase: Client,
   courseIds: string[],

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
 import { validatePassword } from "@/lib/password";
 import { logger } from "@/lib/logger";
+import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -71,17 +72,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
     }
 
-    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: false,
-      user_metadata: {
-        full_name: reg.full_name,
-        matric_number: reg.matric_number,
-        programme_id: reg.programme_id,
-        current_level: reg.current_level,
-      },
-    });
+    const { data: userData, error: createError } = await withAuthRetry(() =>
+      supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: false,
+        user_metadata: {
+          full_name: reg.full_name,
+          matric_number: reg.matric_number,
+          programme_id: reg.programme_id,
+          current_level: reg.current_level,
+        },
+      })
+    );
 
     if (createError) {
       logger.error({ 
@@ -94,9 +97,16 @@ export async function POST(req: Request) {
           email,
           hasPassword: !!password,
           metadataFields: Object.keys(reg),
-          supabaseError: JSON.stringify(createError)
+          supabaseError: serializeAuthError(createError)
         }
       });
+      
+      if (isTransientAuthError(createError)) {
+        return NextResponse.json({ 
+          error: "Our authentication provider is temporarily unavailable. Please try again in a few minutes." 
+        }, { status: 503 });
+      }
+      
       return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
     }
 

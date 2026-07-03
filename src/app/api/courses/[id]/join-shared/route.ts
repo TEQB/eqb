@@ -103,3 +103,90 @@ export async function POST(
     return NextResponse.json({ error: msg || "Failed to join course" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  try {
+    const parsedId = uuidSchema.safeParse(params.id);
+    if (!parsedId.success) {
+      return NextResponse.json({ error: "Invalid course id" }, { status: 400 });
+    }
+    const courseId = parsedId.data;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: rawProfile } = await supabase
+      .from("profiles")
+      .select("id, programme_id, role")
+      .eq("auth_user_id", user.id)
+      .single();
+    const profile = rawProfile as unknown as {
+      id: string;
+      programme_id: string;
+      role: string;
+    } | null;
+
+    if (!profile?.programme_id) {
+      return NextResponse.json({ error: "No programme assigned to your profile" }, { status: 400 });
+    }
+    if (profile.role !== "student") {
+      return NextResponse.json({ error: "Only students can leave shared courses" }, { status: 403 });
+    }
+
+    const service = createServiceClient();
+    const { data: rawCourse } = await service
+      .from("courses")
+      .select("id, scope, programme_id")
+      .eq("id", courseId)
+      .single();
+    const course = rawCourse as unknown as {
+      id: string;
+      scope: string;
+      programme_id: string | null;
+    } | null;
+
+    if (!course) {
+      return NextResponse.json({ error: "Course not found" }, { status: 404 });
+    }
+    if (course.scope !== "shared") {
+      return NextResponse.json({ error: "Only shared courses can be left" }, { status: 400 });
+    }
+    if (course.programme_id === profile.programme_id) {
+      return NextResponse.json({ error: "You own this course and cannot leave it" }, { status: 400 });
+    }
+
+    const { error: delError } = await service
+      .from("programme_courses")
+      .delete()
+      .eq("course_id", courseId)
+      .eq("programme_id", profile.programme_id);
+
+    if (delError) {
+      logger.error({
+        event: "courses.leave_shared_failed",
+        message: "Failed to leave shared course",
+        userId: user.id,
+        metadata: { courseId, error: delError.message },
+      });
+      return NextResponse.json({ error: delError.message }, { status: 500 });
+    }
+
+    logger.info({
+      event: "courses.leave_shared",
+      message: "Student left shared course",
+      userId: user.id,
+      metadata: { courseId, programmeId: profile.programme_id },
+    });
+    return NextResponse.json({ success: true, message: "left" });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error({ event: "courses.join_shared_exception", message: "Exception joining shared course", userId: "unknown", metadata: { error: msg } });
+    return NextResponse.json({ error: msg || "Failed to join course" }, { status: 500 });
+  }
+}
