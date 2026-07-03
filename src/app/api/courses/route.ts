@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
+
+const createCourseSchema = z.object({
+  code: z.string().min(2).max(20).regex(/^[A-Za-z]{2,4}\d{3,4}$/, "Invalid course code format"),
+  title: z.string().min(2).max(200).trim(),
+  level: z.union([z.number(), z.string()]),
+  scope: z.enum(["departmental", "shared", "general", "programme_specific"]).optional(),
+  programme_id: z.string().uuid().optional(),
+  programmeIds: z.array(z.string().uuid()).optional(),
+  standAlone: z.boolean().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +20,15 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const parsed = createCourseSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Invalid input" },
+        { status: 400 },
+      );
     }
 
     const {
@@ -19,26 +39,20 @@ export async function POST(req: NextRequest) {
       programme_id,
       programmeIds = [],
       standAlone = false,
-    } = await req.json();
-
-    if (!code || !title || level == null) {
-      return NextResponse.json({ error: "code, title, and level are required" }, { status: 400 });
-    }
+    } = parsed.data;
 
     const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("programme_id")
+      .select("programme_id, role")
       .eq("auth_user_id", user.id)
       .single();
-    const profile = rawProfile as unknown as { programme_id: string } | null;
-    if (!profile?.programme_id) {
-      return NextResponse.json({ error: "Your profile does not have a programme assigned. Please contact support." }, { status: 404 });
+    const profile = rawProfile as unknown as { programme_id: string; role: string } | null;
+    if (!profile?.programme_id || profile.role !== "student") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const service = createServiceClient();
-    const sharedProgrammeIds = Array.isArray(programmeIds)
-      ? programmeIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
-      : [];
+    const sharedProgrammeIds = programmeIds ?? [];
     const ownerProgrammeId = standAlone
       ? null
       : (programme_id || sharedProgrammeIds[0] || profile.programme_id);

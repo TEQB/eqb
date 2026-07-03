@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
+import { validatePassword } from "@/lib/validations";
 import { logger } from "@/lib/logger";
-
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -24,15 +23,10 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!PASSWORD_REGEX.test(password)) {
+    const passwordCheck = validatePassword(password, { email });
+    if (!passwordCheck.valid) {
       logger.warn({ event: "admin.create.weak_password", message: "Admin password too weak", ip, email });
-      return NextResponse.json(
-        {
-          error:
-            "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
-        },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: passwordCheck.error }, { status: 400 });
     }
 
     if (!allowedAdminEmail || email.toLowerCase() !== allowedAdminEmail.toLowerCase()) {

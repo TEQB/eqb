@@ -72,6 +72,9 @@ export function OtpForm() {
 
     if (result.hasPendingRegistration) {
       const params = new URLSearchParams({ email });
+      if (result.registration?.matricNumber) {
+        params.set("matric", result.registration.matricNumber);
+      }
       router.push(`/register/set-password?${params}`);
     } else {
       router.push(`/login?verified=${encodeURIComponent(email)}`);

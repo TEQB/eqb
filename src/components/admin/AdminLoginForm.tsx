@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { validatePassword } from "@/lib/validations";
 import { toast } from "@/components/ui/toaster";
 
 export function AdminLoginForm({ secret }: { secret: string }) {
@@ -105,10 +106,10 @@ export function AdminLoginForm({ secret }: { secret: string }) {
     e.preventDefault();
     setError("");
 
-    const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
-    if (!PASSWORD_REGEX.test(newPassword)) {
-      setError("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
-      toast.warning("Password must be at least 8 characters with uppercase, lowercase, number, and special character");
+    const passwordCheck = validatePassword(newPassword, { email });
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.error);
+      toast.warning(passwordCheck.error);
       return;
     }
     if (newPassword !== confirmPassword) {

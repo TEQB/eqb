@@ -2,15 +2,21 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
+import { getPasswordStrength, validatePassword } from "@/lib/validations";
+
+const STRENGTH_STYLES = {
+  weak: "bg-danger-500",
+  medium: "bg-amber-500",
+  strong: "bg-success-500",
+} as const;
 
 export function SetPasswordForm() {
   const searchParams = useSearchParams();
-  const supabase = createClient();
   const email = searchParams.get("email") || "";
+  const matricNumber = searchParams.get("matric") || "";
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -18,14 +24,17 @@ export function SetPasswordForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
 
+  const strength = getPasswordStrength(password);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    const validation = validatePassword(password, { email, matricNumber });
+    if (!validation.valid) {
+      setError(validation.error);
       setShakeKey((k) => k + 1);
-      toast.warning("Password must be at least 8 characters");
+      toast.warning(validation.error);
       return;
     }
     if (password !== confirm) {
@@ -71,7 +80,25 @@ export function SetPasswordForm() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5"
+          autoComplete="new-password"
         />
+        {password.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className={cn(
+                  "transition-all duration-300",
+                  STRENGTH_STYLES[strength],
+                  strength === "weak" && "w-1/3",
+                  strength === "medium" && "w-2/3",
+                  strength === "strong" && "w-full",
+                )}
+              />
+            </div>
+            <p className="text-xs text-gray-500 capitalize">Strength: {strength}</p>
+          </div>
+        )}
       </div>
 
       <div className="animate-fade-in-up stagger-2">
@@ -83,6 +110,8 @@ export function SetPasswordForm() {
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
+          className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5"
+          autoComplete="new-password"
         />
       </div>
 

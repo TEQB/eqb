@@ -4,55 +4,53 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toaster";
-
-const SESSION_CHECK_INTERVAL_MS = 30 * 1000;
+import {
+  consumeVoluntaryLogoutFlag,
+  getLoginRedirectPath,
+} from "@/lib/auth-session";
 
 export function SessionManager() {
   const router = useRouter();
   const supabase = createClient();
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wasAuthenticatedRef = useRef(false);
   const toastShownRef = useRef(false);
 
-  const handleSessionExpired = () => {
-    if (toastShownRef.current) return;
-    toastShownRef.current = true;
-
-    toast.error("Session expired", {
-      description: "Logged out due to inactivity. Please log in again.",
-      duration: 8000,
-    });
-
-    void supabase.auth.signOut().then(() => {
-      router.push("/login");
-    });
-  };
-
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      const eventStr = event as string;
-      if (eventStr === "AUTH_SESSION_MISSING" || eventStr === "SIGNED_OUT") {
-        handleSessionExpired();
-      }
-    });
+    const handleExpiredSession = () => {
+      if (toastShownRef.current) return;
+      toastShownRef.current = true;
 
-    const checkSession = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        handleSessionExpired();
-      }
+      toast.error("Session expired — please log in again", { duration: 8000 });
+      router.push(getLoginRedirectPath());
     };
 
-    intervalRef.current = setInterval(() => {
-      void checkSession();
-    }, SESSION_CHECK_INTERVAL_MS);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        wasAuthenticatedRef.current = true;
+        toastShownRef.current = false;
+        return;
+      }
 
-    void checkSession();
+      if (event === "SIGNED_OUT") {
+        if (consumeVoluntaryLogoutFlag()) {
+          wasAuthenticatedRef.current = false;
+          return;
+        }
+        if (wasAuthenticatedRef.current) {
+          wasAuthenticatedRef.current = false;
+          handleExpiredSession();
+        }
+      }
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        wasAuthenticatedRef.current = true;
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
     };
   }, [router, supabase]);
 

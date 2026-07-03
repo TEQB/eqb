@@ -2,9 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Simple in-memory rate limiter for edge/runtime constraints.
-// Key = IP address, value = { count, windowStart }.
-// Fixed 15-minute sliding window, 30 auth attempts max per IP.
+// Coarse edge-only first pass for /api/auth POST traffic.
+// Per-route checkDbRateLimit (persistent) is the primary defense — do not rely on this alone.
+// In-memory state does not survive across serverless instances; kept as a cheap burst absorber.
 const authRateLimitMap = new Map<
   string,
   { count: number; windowStart: number }

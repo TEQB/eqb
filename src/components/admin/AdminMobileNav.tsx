@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 
 export function AdminMobileNav({ secret }: { secret: string }) {
   const [open, setOpen] = useState(false);
@@ -60,14 +61,12 @@ export function AdminMobileNav({ secret }: { secret: string }) {
                 {link.label}
               </Link>
             ))}
-            <form action="/auth/signout" method="post" className="px-3 pt-1">
-              <button
-                type="submit"
-                className="text-sm text-secondary hover:text-primary"
-              >
-                Sign out
-              </button>
-            </form>
+            <SignOutButton
+              redirectTo={`/admin/${secret}/login`}
+              className="px-3 pt-1 text-sm text-secondary hover:text-primary"
+            >
+              Sign out
+            </SignOutButton>
           </div>
         </div>
       )}

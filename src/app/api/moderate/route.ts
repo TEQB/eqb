@@ -297,10 +297,10 @@ Return JSON only.`;
       return NextResponse.json({ pass: false, reason: verdict.reason });
     }
   } catch (error) {
-    const msg = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error);
+    const msg = error instanceof Error ? error.message : String(error);
     logger.error({ event: "moderate.error", message: "Unexpected moderation error", error: msg, durationMs: Date.now() - start });
     return NextResponse.json(
-      { error: "Internal server error", detail: msg },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

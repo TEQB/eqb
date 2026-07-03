@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { loginSchema } from "@/lib/validations";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,6 @@ import { toast } from "@/components/ui/toaster";
 type FormData = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
-  const supabase = createClient();
   const [error, setError] = useState("");
   const [shakeKey, setShakeKey] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -32,15 +30,23 @@ export function LoginForm() {
 
   const onSubmit = async (data: FormData) => {
     setError("");
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
+
+    const res = await fetch("/api/auth/student-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: data.email, password: data.password }),
     });
 
-    if (signInError) {
-      setError(signInError.message);
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message =
+        body.code === "no_account"
+          ? "No account found for this email."
+          : body.error || "Invalid email or password.";
+      setError(message);
       setShakeKey((k) => k + 1);
-      toast.error(signInError.message);
+      toast.error(message);
       return;
     }
 

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { SearchBar } from "@/components/browse/SearchBar";
+import { markVoluntaryLogout } from "@/lib/auth-session";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,14 +28,14 @@ interface HeaderProps {
 export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userName, feedbackCount = 0 }: HeaderProps) {
   const router = useRouter();
   const supabase = createClient();
+  const initial = userName?.charAt(0)?.toUpperCase() || "U";
 
   const handleLogout = async () => {
+    markVoluntaryLogout();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   };
-
-  const initial = userName?.charAt(0)?.toUpperCase() || "U";
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-white/10 bg-primary px-3 text-primary-foreground shadow-[0_18px_45px_rgba(122,16,48,0.22)] backdrop-blur-xl lg:h-16 lg:gap-4 lg:px-4">
@@ -129,7 +130,7 @@ export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userNam
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2">
+            <DropdownMenuItem onClick={() => void handleLogout()} className="flex items-center gap-2">
               <LogoutIcon />
               Log out
             </DropdownMenuItem>

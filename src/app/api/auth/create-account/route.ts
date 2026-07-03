@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
+import { validatePassword } from "@/lib/validations";
 import { logger } from "@/lib/logger";
-
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -23,17 +22,6 @@ export async function POST(req: Request) {
     if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
       logger.warn({ event: "account.create.invalid_input", message: "Invalid registration input", ip, email });
       return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
-    }
-
-    if (!PASSWORD_REGEX.test(password)) {
-      logger.warn({ event: "account.create.weak_password", message: "Password does not meet strength requirements", ip, email });
-      return NextResponse.json(
-        {
-          error:
-            "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
-        },
-        { status: 400 },
-      );
     }
 
     const rateKey = `create-account:${ip}:${email.toLowerCase()}`;
@@ -56,6 +44,15 @@ export async function POST(req: Request) {
     if (!reg) {
       logger.warn({ event: "account.create.no_pending", message: "No pending registration found", ip, email });
       return NextResponse.json({ error: "No pending registration" }, { status: 400 });
+    }
+
+    const passwordCheck = validatePassword(password, {
+      email,
+      matricNumber: reg.matric_number,
+    });
+    if (!passwordCheck.valid) {
+      logger.warn({ event: "account.create.weak_password", message: "Password does not meet strength requirements", ip, email });
+      return NextResponse.json({ error: passwordCheck.error }, { status: 400 });
     }
 
     const { data: existingProfile } = await supabase

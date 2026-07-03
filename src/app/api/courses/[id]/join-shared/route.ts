@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
+
+const uuidSchema = z.string().uuid();
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const courseId = params.id;
-    if (!courseId) {
-      return NextResponse.json({ error: "Course id is required" }, { status: 400 });
+    const parsedId = uuidSchema.safeParse(params.id);
+    if (!parsedId.success) {
+      return NextResponse.json({ error: "Invalid course id" }, { status: 400 });
     }
+    const courseId = parsedId.data;
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();

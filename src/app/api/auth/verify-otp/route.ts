@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkRateLimit, hashOtp } from "@/lib/utils";
+import { checkDbRateLimit, hashOtp } from "@/lib/utils";
+import { verifyOtpSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
@@ -11,14 +12,20 @@ export async function POST(req: Request) {
     "unknown";
 
   try {
-    const { email, code } = await req.json();
-    if (!email || !code) {
-      logger.warn({ event: "otp.verify.invalid_input", message: "Missing email or code", ip });
-      return NextResponse.json({ error: "Email and code required" }, { status: 400 });
+    const body = await req.json();
+    const parsed = verifyOtpSchema.safeParse(body);
+    if (!parsed.success) {
+      logger.warn({ event: "otp.verify.invalid_input", message: "Invalid verify OTP body", ip, metadata: { errors: parsed.error.issues } });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Email and code required" },
+        { status: 400 },
+      );
     }
 
+    const { email, code } = parsed.data;
+
     const rateKey = `verify-otp:${ip}:${email.toLowerCase()}`;
-    if (!checkRateLimit(rateKey, 10, 60_000)) {
+    if (!(await checkDbRateLimit(rateKey, 10, 60_000))) {
       logger.warn({ event: "otp.verify.rate_limited", message: "Verify OTP rate limit hit", ip, email });
       return NextResponse.json(
         { error: "Too many verification attempts. Please wait before trying again." },
