@@ -424,7 +424,7 @@ export async function GET(req: NextRequest) {
         const dateTo = req.nextUrl.searchParams.get("dateTo") || undefined;
         const search = req.nextUrl.searchParams.get("search") || undefined;
 
-        const { logs, total } = await queryLogs({ page, limit, level, event, userId, ip, dateFrom, dateTo, search });
+        const { logs, total } = await queryLogs({ page, limit, level, event, userId, ip, dateFrom, dateTo, search, excludeEventPrefix: "admin.", excludePathPrefix: "/admin/" });
         return NextResponse.json({ logs, total, page, limit });
       }
 

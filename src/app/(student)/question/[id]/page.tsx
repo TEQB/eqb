@@ -10,6 +10,7 @@ import { FlagModal } from "@/components/question/FlagModal";
 import { Badge } from "@/components/ui/badge";
 import { formatSession } from "@/lib/utils";
 import { ImageViewer } from "@/components/question/ImageViewer";
+import { LazyMount } from "@/components/ui/LazyMount";
 import {
   Dialog,
   DialogContent,
@@ -227,11 +228,24 @@ export default function QuestionPage({
                 className="w-full min-h-[600px] rounded-2xl border-0"
                 title={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
               />
-            ) : (
+            ) : page.page_number === 1 ? (
               <ImageViewer
                 src={`/api/storage/${page.file_url}`}
                 alt={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
               />
+            ) : (
+              <LazyMount
+                placeholder={
+                  <div className="flex min-h-[400px] items-center justify-center rounded-2xl bg-gray-50">
+                    <p className="text-sm text-gray-400">Page {page.page_number} — scroll to load</p>
+                  </div>
+                }
+              >
+                <ImageViewer
+                  src={`/api/storage/${page.file_url}`}
+                  alt={`Past question ${formatSession(question.year)} — page ${page.page_number}`}
+                />
+              </LazyMount>
             )}
           </div>
         ))}

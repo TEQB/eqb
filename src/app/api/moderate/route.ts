@@ -6,6 +6,7 @@ import { moderateSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
 import { moderateWithFailover } from "@/lib/moderation-providers";
 import { notifyAdmins, createNotification, notifyCourseStudents } from "@/lib/notifications";
+import { compressExamImage } from "@/lib/image-compression";
 
 const RATE_LIMIT = 3;
 const RATE_WINDOW_MS = 60_000;
@@ -231,9 +232,28 @@ Return JSON only.`;
             .download(oldPath);
 
           if (fileData) {
+            const isImage = !newPath.endsWith(".pdf");
+            let uploadBuffer: Buffer = Buffer.from(await fileData.arrayBuffer());
+
+            if (isImage) {
+              try {
+                uploadBuffer = await compressExamImage(uploadBuffer);
+              } catch (compressErr) {
+                const msg = compressErr instanceof Error ? compressErr.message : String(compressErr);
+                logger.warn({
+                  event: "moderate.compression_failed",
+                  message: "Image compression failed, uploading original instead",
+                  userId: user.id,
+                  metadata: { questionId, oldPath, newPath, error: msg },
+                });
+              }
+            }
+
             const { error: uploadError } = await service.storage
               .from("approved")
-              .upload(newPath, fileData);
+              .upload(newPath, uploadBuffer, {
+                contentType: isImage ? "image/jpeg" : "application/pdf",
+              });
 
             if (uploadError) {
               logger.error({ event: "moderate.page_move_failed", message: "Failed to move page to approved bucket", userId: user.id, metadata: { questionId, oldPath, newPath, error: uploadError.message } });

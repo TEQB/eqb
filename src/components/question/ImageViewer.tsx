@@ -511,6 +511,7 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
       <img
         src={src}
         alt={alt}
+        loading={isFullscreenStage ? "eager" : "lazy"}
         className={`select-none ${isFullscreenStage ? "max-h-[calc(100dvh-7rem)] max-w-full" : "w-full h-auto"}`}
         style={{
           transform: imageTransformSingle,

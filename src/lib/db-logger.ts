@@ -61,6 +61,8 @@ export async function queryLogs(params: {
   dateFrom?: string;
   dateTo?: string;
   search?: string;
+  excludeEventPrefix?: string;
+  excludePathPrefix?: string;
 }): Promise<{ logs: never[]; total: number }> {
   const {
     page = 1,
@@ -72,6 +74,8 @@ export async function queryLogs(params: {
     dateFrom,
     dateTo,
     search,
+    excludeEventPrefix,
+    excludePathPrefix,
   } = params;
 
   const supabase = createServiceClient();
@@ -88,6 +92,13 @@ export async function queryLogs(params: {
   if (search) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = (query as unknown as { or: (filter: string) => any }).or(`message.ilike.%${search}%,event.ilike.%${search}%`) as typeof query;
+  }
+  if (excludeEventPrefix) {
+    query = query.not("event", "ilike", `${excludeEventPrefix}%`);
+  }
+  if (excludePathPrefix) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as unknown as { or: (filter: string) => any }).or(`path.not.ilike.${excludePathPrefix}%,path.is.null`) as typeof query;
   }
 
   const { data, error, count } = await query
