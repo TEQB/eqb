@@ -14,7 +14,7 @@
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://qcxmyqdmqenrynehdeci.supabase.co; font-src 'self'; connect-src 'self' https://qcxmyqdmqenrynehdeci.supabase.co https://api.resend.com https://api.brevo.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://qcxmyqdmqenrynehdeci.supabase.co; font-src 'self'; media-src 'self' data: blob:; connect-src 'self' https://qcxmyqdmqenrynehdeci.supabase.co https://api.resend.com https://api.brevo.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
 
 # ── Cache static assets ──
 [[headers]]

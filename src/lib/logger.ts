@@ -60,9 +60,11 @@ function write(level: LogLevel, e: LogEvent) {
     ...(e.metadata ? { meta: e.metadata } : {}),
   };
   const line = `${PREFIX} ${JSON.stringify(entry)}`;
-  if (level === "error") console.error(line);
-  else if (level === "warn") console.warn(line);
-  else console.log(line);
+  if (process.env.NODE_ENV !== "production") {
+    if (level === "error") console.error(line);
+    else if (level === "warn") console.warn(line);
+    else console.log(line);
+  }
   void persistServerLog(level, e);
 }
 
