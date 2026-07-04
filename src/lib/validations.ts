@@ -129,6 +129,7 @@ export const broadcastSchema = z.object({
     (v) => (v ? Number(v) : undefined),
     z.number().int().min(100).max(600).optional(),
   ),
+  student_ids: z.array(z.string().uuid()).optional(),
 });
 
 export const feedbackSchema = z.object({

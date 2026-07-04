@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "@/components/ui/toaster";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Broadcast = {
   id: string;
@@ -47,9 +48,16 @@ export default function AdminBroadcastsPage() {
   const [selectedProgramme, setSelectedProgramme] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("");
 
+  const [recipientMode, setRecipientMode] = useState<"filter" | "specific">("filter");
+  const [selectedStudents, setSelectedStudents] = useState<StudentPreview[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<StudentPreview[]>([]);
+  const [searching, setSearching] = useState(false);
+
   const [recipientTotal, setRecipientTotal] = useState<number | null>(null);
   const [previewStudents, setPreviewStudents] = useState<StudentPreview[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
@@ -102,13 +110,51 @@ export default function AdminBroadcastsPage() {
     load();
   }, [selectedFaculty]);
 
+  // Student search with debounce
+  useEffect(() => {
+    if (!searchQuery.trim() || recipientMode !== "specific") {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const params = new URLSearchParams({ action: "students", search: searchQuery.trim() });
+        const res = await fetch(`/api/admin?${params}`);
+        const data = await res.json();
+        const results = (data.students ?? []) as StudentPreview[];
+        const selectedIds = new Set(selectedStudents.map((s) => s.id));
+        setSearchResults(results.filter((s: StudentPreview) => !selectedIds.has(s.id)));
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedStudents, recipientMode]);
+
+  const addStudent = (student: StudentPreview) => {
+    setSelectedStudents((prev) => [...prev, student]);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const removeStudent = (id: string) => {
+    setSelectedStudents((prev) => prev.filter((s) => s.id !== id));
+  };
+
   const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
-    if (selectedFaculty) params.set("faculty_id", selectedFaculty);
-    if (selectedProgramme) params.set("programme_id", selectedProgramme);
-    if (selectedLevel) params.set("level", selectedLevel);
+    if (recipientMode === "specific" && selectedStudents.length > 0) {
+      params.set("student_ids", selectedStudents.map((s) => s.id).join(","));
+    } else {
+      if (selectedFaculty) params.set("faculty_id", selectedFaculty);
+      if (selectedProgramme) params.set("programme_id", selectedProgramme);
+      if (selectedLevel) params.set("level", selectedLevel);
+    }
     return params;
-  }, [selectedFaculty, selectedProgramme, selectedLevel]);
+  }, [recipientMode, selectedStudents, selectedFaculty, selectedProgramme, selectedLevel]);
 
   const fetchRecipients = useCallback(async () => {
     const params = buildFilterParams();
@@ -136,7 +182,9 @@ export default function AdminBroadcastsPage() {
   }, [fetchRecipients]);
 
   const totalToSend = recipientTotal !== null ? recipientTotal : null;
-  const isFiltered = selectedFaculty || selectedProgramme || selectedLevel;
+  const isFiltered = recipientMode === "specific"
+    ? selectedStudents.length > 0
+    : !!(selectedFaculty || selectedProgramme || selectedLevel);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,9 +199,13 @@ export default function AdminBroadcastsPage() {
         subject: subject.trim(),
         html_body: body.trim(),
       };
-      if (selectedFaculty) payload.faculty_id = selectedFaculty;
-      if (selectedProgramme) payload.programme_id = selectedProgramme;
-      if (selectedLevel) payload.level = parseInt(selectedLevel);
+      if (recipientMode === "specific" && selectedStudents.length > 0) {
+        payload.student_ids = selectedStudents.map((s) => s.id);
+      } else {
+        if (selectedFaculty) payload.faculty_id = selectedFaculty;
+        if (selectedProgramme) payload.programme_id = selectedProgramme;
+        if (selectedLevel) payload.level = parseInt(selectedLevel);
+      }
 
       const res = await fetch("/api/admin?action=send-broadcast", {
         method: "POST",
@@ -170,6 +222,8 @@ export default function AdminBroadcastsPage() {
       setSelectedFaculty("");
       setSelectedProgramme("");
       setSelectedLevel("");
+      setSelectedStudents([]);
+      setRecipientMode("filter");
       fetchBroadcasts();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send broadcast");
@@ -177,6 +231,37 @@ export default function AdminBroadcastsPage() {
       setSending(false);
     }
   };
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const wrapTag = useCallback((tag: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = body.substring(start, end);
+    const before = body.substring(0, start);
+    const after = body.substring(end);
+    const wrapped = selected ? `<${tag}>${selected}</${tag}>` : `<${tag}></${tag}>`;
+    setBody(before + wrapped + after);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
+    });
+  }, [body]);
+
+  const insertBr = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const before = body.substring(0, pos);
+    const after = body.substring(ta.selectionEnd);
+    setBody(before + "<br>" + after);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(pos + 4, pos + 4);
+    });
+  }, [body]);
 
   const formatDate = (value: string | null) =>
     value
@@ -216,66 +301,158 @@ export default function AdminBroadcastsPage() {
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">Compose Broadcast</h3>
         <p className="mt-1 text-sm text-gray-500">
-          Use plain text or HTML for the message body. Leave filters empty to send to all students.
+          Use plain text or HTML for the message body.
         </p>
 
         <form onSubmit={handleSend} className="mt-5 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label htmlFor="faculty" className="block text-sm font-medium text-gray-700">
-                Faculty
-              </label>
-              <select
-                id="faculty"
-                value={selectedFaculty}
-                onChange={(e) => {
-                  setSelectedFaculty(e.target.value);
-                  setSelectedProgramme("");
-                }}
-                className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
-              >
-                <option value="">All faculties</option>
-                {faculties.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="programme" className="block text-sm font-medium text-gray-700">
-                Programme
-              </label>
-              <select
-                id="programme"
-                value={selectedProgramme}
-                onChange={(e) => setSelectedProgramme(e.target.value)}
-                className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
-                disabled={!selectedFaculty}
-              >
-                <option value="">All programmes</option>
-                {programmes.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="level" className="block text-sm font-medium text-gray-700">
-                Level
-              </label>
-              <select
-                id="level"
-                value={selectedLevel}
-                onChange={(e) => setSelectedLevel(e.target.value)}
-                className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
-              >
-                <option value="">All levels</option>
-                {LEVEL_OPTIONS.map((l) => (
-                  <option key={l} value={l}>{l} Level</option>
-                ))}
-              </select>
-            </div>
+          {/* Recipient mode toggle */}
+          <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-3">
+            <span className="text-sm font-medium text-gray-700">Send to:</span>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="recipient-mode"
+                checked={recipientMode === "filter"}
+                onChange={() => setRecipientMode("filter")}
+                className="text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Filter by faculty / programme / level</span>
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="recipient-mode"
+                checked={recipientMode === "specific"}
+                onChange={() => setRecipientMode("specific")}
+                className="text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Select specific students</span>
+            </label>
           </div>
+
+          {recipientMode === "filter" ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label htmlFor="faculty" className="block text-sm font-medium text-gray-700">
+                  Faculty
+                </label>
+                <select
+                  id="faculty"
+                  value={selectedFaculty}
+                  onChange={(e) => {
+                    setSelectedFaculty(e.target.value);
+                    setSelectedProgramme("");
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
+                >
+                  <option value="">All faculties</option>
+                  {faculties.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="programme" className="block text-sm font-medium text-gray-700">
+                  Programme
+                </label>
+                <select
+                  id="programme"
+                  value={selectedProgramme}
+                  onChange={(e) => setSelectedProgramme(e.target.value)}
+                  disabled={!selectedFaculty}
+                  className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">All programmes</option>
+                  {programmes.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="level" className="block text-sm font-medium text-gray-700">
+                  Level
+                </label>
+                <select
+                  id="level"
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
+                >
+                  <option value="">All levels</option>
+                  {LEVEL_OPTIONS.map((l) => (
+                    <option key={l} value={l}>{l} Level</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Search and select students
+              </label>
+              <div className="relative">
+                <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name or matric number..."
+                  className="block w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
+                />
+                {searching && (
+                  <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+                  {searchResults.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => addStudent(s)}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors hover:bg-primary-50"
+                    >
+                      <div>
+                        <span className="font-medium text-gray-900">{s.full_name}</span>
+                        <span className="ml-2 text-gray-500">{s.matric_number}</span>
+                      </div>
+                      <span className="text-xs text-gray-400">{s.programme_name} - Lvl {s.current_level}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedStudents.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedStudents.map((s) => (
+                    <span
+                      key={s.id}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700"
+                    >
+                      {s.full_name} ({s.matric_number})
+                      <button
+                        type="button"
+                        onClick={() => removeStudent(s.id)}
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-primary-400 hover:bg-primary-200 hover:text-primary-700"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {isFiltered && (
             <div className="rounded-xl bg-primary-50 px-4 py-3 text-sm text-primary-800">
@@ -283,8 +460,7 @@ export default function AdminBroadcastsPage() {
                 "Counting matching students..."
               ) : (
                 <>
-                  <strong>{totalToSend ?? 0}</strong> student{totalToSend !== 1 ? "s" : ""} match
-                  {totalToSend !== 1 ? "" : "es"} the selected filters.
+                  <strong>{totalToSend ?? 0}</strong> student{totalToSend !== 1 ? "s" : ""} match{totalToSend !== 1 ? "" : "es"} the selected {recipientMode === "specific" ? "students" : "filters"}.
                 </>
               )}
             </div>
@@ -306,24 +482,93 @@ export default function AdminBroadcastsPage() {
           </div>
 
           <div>
-            <label htmlFor="body" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Message body
             </label>
-            <textarea
-              id="body"
-              rows={10}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20"
-              placeholder="Write your message here. HTML tags are supported for formatting."
-              maxLength={50000}
-            />
+            <div className="mt-1 rounded-xl border border-gray-300 focus-within:border-primary-600 focus-within:ring-2 focus-within:ring-primary-600/20 overflow-hidden">
+              <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => wrapTag("strong")}
+                  title="Bold"
+                  className="rounded-md px-2 py-1 text-sm font-bold text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >B</button>
+                <button
+                  type="button"
+                  onClick={() => wrapTag("em")}
+                  title="Italic"
+                  className="rounded-md px-2 py-1 text-sm italic text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >I</button>
+                <button
+                  type="button"
+                  onClick={() => wrapTag("u")}
+                  title="Underline"
+                  className="rounded-md px-2 py-1 text-sm underline text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >U</button>
+                <span className="mx-1 h-5 w-px bg-gray-300" />
+                <button
+                  type="button"
+                  onClick={() => wrapTag("p")}
+                  title="Paragraph"
+                  className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >P</button>
+                <button
+                  type="button"
+                  onClick={() => insertBr()}
+                  title="Line break"
+                  className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >&lt;br&gt;</button>
+                <span className="mx-1 h-5 w-px bg-gray-300" />
+                <button
+                  type="button"
+                  onClick={() => wrapTag("h3")}
+                  title="Heading"
+                  className="rounded-md px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >H</button>
+                <button
+                  type="button"
+                  onClick={() => wrapTag("ul")}
+                  title="Bullet list"
+                  className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >ul</button>
+                <button
+                  type="button"
+                  onClick={() => wrapTag("ol")}
+                  title="Numbered list"
+                  className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >ol</button>
+                <button
+                  type="button"
+                  onClick={() => wrapTag("li")}
+                  title="List item"
+                  className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                >li</button>
+              </div>
+              <textarea
+                ref={textareaRef}
+                id="body"
+                rows={10}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="block w-full border-0 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-0"
+                placeholder="Write your message here. Use the toolbar above for formatting."
+                maxLength={50000}
+              />
+            </div>
             <p className="mt-1 text-xs text-gray-400">
-              HTML is supported. Use &lt;br&gt; for line breaks, &lt;p&gt; for paragraphs.
+              HTML is supported. You can also type HTML tags directly.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              disabled={!subject.trim() || !body.trim()}
+              className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              Preview
+            </button>
             <button
               type="submit"
               disabled={sending || !subject.trim() || !body.trim()}
@@ -346,6 +591,44 @@ export default function AdminBroadcastsPage() {
           </div>
         </form>
       </div>
+
+      {/* Preview modal */}
+      <Dialog open={showPreview} onOpenChange={(open) => !open && setShowPreview(false)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Broadcast preview</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Recipients</h3>
+              <p className="mt-1 text-sm text-gray-900">
+                {totalToSend ?? "All students"} student{totalToSend !== 1 ? "s" : ""}
+                {isFiltered && totalToSend !== null ? ` match the selected filters` : ""}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Subject</h3>
+              <p className="mt-1 text-sm font-medium text-gray-900">{subject || "(no subject)"}</p>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Message body</h3>
+              <div
+                className="mt-2 rounded-xl border border-gray-200 bg-white p-4 text-sm leading-relaxed [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                dangerouslySetInnerHTML={{ __html: body }}
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {isFiltered && previewStudents.length > 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

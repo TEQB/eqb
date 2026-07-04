@@ -474,38 +474,69 @@ export async function GET(req: NextRequest) {
         const facultyFilter = req.nextUrl.searchParams.get("faculty_id") || null;
         const programmeFilter = req.nextUrl.searchParams.get("programme_id") || null;
         const levelFilter = req.nextUrl.searchParams.get("level") ? parseInt(req.nextUrl.searchParams.get("level")!) : null;
+        const studentIdsParam = req.nextUrl.searchParams.get("student_ids") || null;
 
-        let query = service
+        // Resolve faculty filter to programme IDs (more reliable than join filtering)
+        let programmeIds: string[] | undefined;
+        if (facultyFilter && validateUUID(facultyFilter)) {
+          const { data: programmes } = await service
+            .from("programmes")
+            .select("id")
+            .eq("faculty_id", facultyFilter);
+          programmeIds = (programmes ?? []).map((p: unknown) => (p as { id: string }).id);
+          if (programmeIds.length === 0) {
+            return NextResponse.json({ total: 0, students: [] });
+          }
+        }
+
+        // Handle individual student IDs
+        let selectedStudentIds: string[] | undefined;
+        if (studentIdsParam) {
+          const rawIds = studentIdsParam.split(",").map((s) => s.trim()).filter(Boolean);
+          selectedStudentIds = rawIds.filter((id) => validateUUID(id));
+          if (selectedStudentIds.length === 0) {
+            return NextResponse.json({ total: 0, students: [] });
+          }
+        }
+
+        // Count query (simple, no joins needed since we resolved IDs)
+        let countQuery = service
           .from("profiles")
-          .select("id, auth_user_id, full_name, matric_number, current_level, programme_id, programmes!inner(name, faculty_id, faculties!inner(name))")
+          .select("id", { count: "exact", head: true })
           .eq("role", "student");
 
-        if (facultyFilter) {
-          query = (query as any).eq("programmes.faculty_id", facultyFilter);
-        }
-        if (programmeFilter) {
-          query = query.eq("programme_id", programmeFilter);
-        }
-        if (levelFilter) {
-          query = query.eq("current_level", levelFilter);
+        if (selectedStudentIds) {
+          countQuery = countQuery.in("id", selectedStudentIds);
+        } else {
+          if (programmeIds) countQuery = countQuery.in("programme_id", programmeIds);
+          if (programmeFilter) countQuery = countQuery.eq("programme_id", programmeFilter);
+          if (levelFilter) countQuery = countQuery.eq("current_level", levelFilter);
         }
 
-        const { data: rawStudents, count } = await (query as any)
-          .select("id", { count: "exact", head: false })
-          .order("created_at", { ascending: false })
-          .limit(0);
-
+        const { count } = await countQuery;
         const totalCount = count ?? 0;
 
-        const { data: rawPreview } = await (query as any)
-          .select("id, full_name, matric_number, current_level, programme_id, programmes!inner(name, faculty_id, faculties!inner(name))")
-          .eq("role", "student")
+        // Preview query with joins for display
+        let previewQuery = service
+          .from("profiles")
+          .select("id, full_name, matric_number, current_level, programme_id, programmes!inner(name, faculties!inner(name))")
+          .eq("role", "student");
+
+        if (selectedStudentIds) {
+          previewQuery = previewQuery.in("id", selectedStudentIds);
+        } else {
+          if (programmeIds) previewQuery = previewQuery.in("programme_id", programmeIds);
+          if (programmeFilter) previewQuery = previewQuery.eq("programme_id", programmeFilter);
+          if (levelFilter) previewQuery = previewQuery.eq("current_level", levelFilter);
+        }
+
+        const { data: rawPreview } = await previewQuery
           .order("created_at", { ascending: false })
           .limit(20);
 
         const students = ((rawPreview ?? []) as Array<{
           id: string; full_name: string; matric_number: string; current_level: number;
-          programme_id: string; programmes: { name: string; faculty_id: string; faculties: { name: string } };
+          programme_id: string; programmes: { name: string; faculties: { name: string } };
         }>).map((s) => ({
           id: s.id,
           full_name: s.full_name,
@@ -1750,21 +1781,35 @@ Return JSON only.`;
           return NextResponse.json({ error: parsed.error.errors[0]?.message || "Invalid input" }, { status: 400 });
         }
 
-        const { subject, html_body, faculty_id, programme_id, level } = parsed.data;
+        const { subject, html_body, faculty_id, programme_id, level, student_ids } = parsed.data;
 
-        let studentFilterQuery = (service as any)
+        // Resolve faculty filter to programme IDs
+        let programmeIds: string[] | undefined;
+        if (faculty_id && validateUUID(faculty_id)) {
+          const { data: programmes } = await service
+            .from("programmes")
+            .select("id")
+            .eq("faculty_id", faculty_id);
+          programmeIds = (programmes ?? []).map((p: unknown) => (p as { id: string }).id);
+        }
+
+        let studentFilterQuery = service
           .from("profiles")
-          .select("id, auth_user_id, full_name, programme_id, programmes!inner(faculty_id)")
+          .select("id, auth_user_id, full_name")
           .eq("role", "student");
 
-        if (faculty_id) {
-          studentFilterQuery = studentFilterQuery.eq("programmes.faculty_id", faculty_id);
-        }
-        if (programme_id) {
-          studentFilterQuery = studentFilterQuery.eq("programme_id", programme_id);
-        }
-        if (level) {
-          studentFilterQuery = studentFilterQuery.eq("current_level", level);
+        if (student_ids && student_ids.length > 0) {
+          studentFilterQuery = studentFilterQuery.in("id", student_ids);
+        } else {
+          if (programmeIds && programmeIds.length > 0) {
+            studentFilterQuery = studentFilterQuery.in("programme_id", programmeIds);
+          }
+          if (programme_id) {
+            studentFilterQuery = studentFilterQuery.eq("programme_id", programme_id);
+          }
+          if (level) {
+            studentFilterQuery = studentFilterQuery.eq("current_level", level);
+          }
         }
 
         const { data: rawStudents } = await studentFilterQuery;
@@ -1805,7 +1850,8 @@ Return JSON only.`;
             continue;
           }
           try {
-            await sendEmail(email, subject, html_body);
+            const broadcastFrom = process.env.ADMIN_INITIAL_EMAIL;
+            await sendEmail(email, subject, html_body, undefined, broadcastFrom);
             successCount++;
           } catch (err) {
             failureCount++;

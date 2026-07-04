@@ -40,14 +40,17 @@ async function sendViaResend(
   to: string,
   subject: string,
   html: string,
+  text?: string,
   bcc?: string[],
+  from?: string,
 ): Promise<void> {
   const { error } = await getResendClient().emails.send({
-    from: FROM_EMAIL,
+    from: from ?? FROM_EMAIL,
     to,
     bcc,
     subject,
     html,
+    text,
   });
   if (error) throw new Error(`Resend error: ${error.message}`);
   logger.info({ event: "email.sent.via_resend", message: "Email sent via Resend", metadata: { to, subject, bccCount: bcc?.length ?? 0 } });
@@ -57,14 +60,18 @@ async function sendViaBrevo(
   to: string,
   subject: string,
   html: string,
+  text?: string,
   bcc?: string[],
+  from?: string,
 ): Promise<void> {
   const client = getBrevoClient();
   const bccContacts = bcc?.map((email) => ({ email })) ?? [];
+  const parsedFrom = from ? { name: from.split("@")[0], email: from } : { name: "EQB", email: "noreply@eqb.info" };
 
   const result = await client.transactionalEmails.sendTransacEmail({
     htmlContent: html,
-    sender: { name: "EQB", email: "noreply@eqb.info" },
+    textContent: text,
+    sender: parsedFrom,
     subject,
     to: [{ email: to }],
     bcc: bccContacts.length > 0 ? bccContacts : undefined,
@@ -80,7 +87,9 @@ async function sendViaMailjet(
   to: string,
   subject: string,
   html: string,
+  text?: string,
   bcc?: string[],
+  from?: string,
 ): Promise<void> {
   const client = getMailjetClient();
   const bccRecipients = bcc?.map((email) => ({ Email: email })) ?? [];
@@ -90,11 +99,12 @@ async function sendViaMailjet(
     .request({
       Messages: [
         {
-          From: { Email: "noreply@eqb.info", Name: "EQB" },
+          From: { Email: from ?? "noreply@eqb.info", Name: "EQB" },
           To: [{ Email: to }],
           Bcc: bccRecipients.length > 0 ? bccRecipients : undefined,
           Subject: subject,
           HTMLPart: html,
+          TextPart: text,
         },
       ],
     });
@@ -112,26 +122,47 @@ async function sendViaMailjet(
   logger.info({ event: "email.sent.via_mailjet", message: "Email sent via Mailjet", metadata: { to, subject, bccCount: bcc?.length ?? 0 } });
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/g, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function sendEmail(
   to: string,
   subject: string,
   html: string,
   bcc?: string[],
+  from?: string,
+  text?: string,
 ): Promise<void> {
+  const plainText = text ?? stripHtml(html);
   try {
-    await sendViaResend(to, subject, html, bcc);
+    await sendViaResend(to, subject, html, plainText, bcc, from);
   } catch (resendErr) {
     const resendMsg = resendErr instanceof Error ? resendErr.message : String(resendErr);
     logger.warn({ event: "email.resend_failed", message: "Resend failed, trying Brevo", metadata: { to, subject, error: resendMsg } });
 
     try {
-      await sendViaBrevo(to, subject, html, bcc);
+      await sendViaBrevo(to, subject, html, plainText, bcc, from);
     } catch (brevoErr) {
       const brevoMsg = brevoErr instanceof Error ? brevoErr.message : String(brevoErr);
       logger.warn({ event: "email.brevo_failed", message: "Brevo failed, trying Mailjet", metadata: { to, subject, error: brevoMsg } });
 
       try {
-        await sendViaMailjet(to, subject, html, bcc);
+        await sendViaMailjet(to, subject, html, plainText, bcc, from);
       } catch (mailjetErr) {
         const mailjetMsg = mailjetErr instanceof Error ? mailjetErr.message : String(mailjetErr);
         logger.error({
@@ -147,4 +178,4 @@ export async function sendEmail(
   }
 }
 
-export { FROM_EMAIL, sendViaResend, sendViaBrevo, sendViaMailjet };
+export { FROM_EMAIL, stripHtml, sendViaResend, sendViaBrevo, sendViaMailjet };
