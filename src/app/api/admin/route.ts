@@ -552,13 +552,13 @@ export async function GET(req: NextRequest) {
       case "list-broadcasts": {
         const { data: raw } = await (service as any)
           .from("broadcasts")
-          .select("id, subject, recipient_count, success_count, failure_count, status, created_at, sent_at, sent_by")
+          .select("id, subject, recipient_count, success_count, failure_count, status, created_at, sent_at, sent_by, error_log")
           .order("created_at", { ascending: false })
           .limit(50);
 
         const broadcasts = (raw ?? []) as Array<{
           id: string; subject: string; recipient_count: number; success_count: number;
-          failure_count: number; status: string; created_at: string | null; sent_at: string | null; sent_by: string;
+          failure_count: number; status: string; created_at: string | null; sent_at: string | null; sent_by: string; error_log: string | null;
         }>;
 
         const profileIds = Array.from(new Set(broadcasts.map((b) => b.sent_by)));
@@ -1884,7 +1884,7 @@ Return JSON only.`;
             continue;
           }
           try {
-            const broadcastFrom = process.env.ADMIN_INITIAL_EMAIL;
+            const broadcastFrom = `EQB Admin <${process.env.ADMIN_INITIAL_EMAIL}>`;
             const personalizedSubject = replacePlaceholders(subject, student, email, programmeNameMap);
             const personalizedBody = replacePlaceholders(html_body, student, email, programmeNameMap);
             await sendEmail(email, personalizedSubject, personalizedBody, undefined, broadcastFrom);

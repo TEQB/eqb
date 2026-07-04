@@ -5,6 +5,12 @@ import { logger } from "@/lib/logger";
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "EQB <noreply@eqb.info>";
 
+function parseFromString(from: string): { name: string; email: string } {
+  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) return { name: match[1].trim(), email: match[2] };
+  return { name: from.split("@")[0], email: from };
+}
+
 let resendClient: Resend | null = null;
 
 function getResendClient(): Resend {
@@ -66,7 +72,7 @@ async function sendViaBrevo(
 ): Promise<void> {
   const client = getBrevoClient();
   const bccContacts = bcc?.map((email) => ({ email })) ?? [];
-  const parsedFrom = from ? { name: from.split("@")[0], email: from } : { name: "EQB", email: "noreply@eqb.info" };
+  const parsedFrom = from ? parseFromString(from) : { name: "EQB", email: "noreply@eqb.info" };
 
   const result = await client.transactionalEmails.sendTransacEmail({
     htmlContent: html,
@@ -93,13 +99,14 @@ async function sendViaMailjet(
 ): Promise<void> {
   const client = getMailjetClient();
   const bccRecipients = bcc?.map((email) => ({ Email: email })) ?? [];
+  const parsedFrom = from ? parseFromString(from) : { name: "EQB", email: "noreply@eqb.info" };
 
   const result = await client
     .post("send", { version: "v3.1" })
     .request({
       Messages: [
         {
-          From: { Email: from ?? "noreply@eqb.info", Name: "EQB" },
+          From: { Email: parsedFrom.email, Name: parsedFrom.name },
           To: [{ Email: to }],
           Bcc: bccRecipients.length > 0 ? bccRecipients : undefined,
           Subject: subject,

@@ -16,6 +16,7 @@ type Broadcast = {
   created_at: string | null;
   sent_at: string | null;
   sent_by_name: string;
+  error_log: string | null;
 };
 
 type Faculty = { id: string; name: string; slug: string };
@@ -58,6 +59,8 @@ export default function AdminBroadcastsPage() {
   const [previewStudents, setPreviewStudents] = useState<StudentPreview[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  const [errorBroadcast, setErrorBroadcast] = useState<Broadcast | null>(null);
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
@@ -630,6 +633,41 @@ export default function AdminBroadcastsPage() {
         </DialogContent>
       </Dialog>
 
+      {errorBroadcast && (
+        <Dialog open={true} onOpenChange={() => setErrorBroadcast(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{`Delivery Errors \u2014 "${errorBroadcast.subject}"`}</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {(() => {
+                try {
+                  const errors: { email: string; error: string }[] = JSON.parse(errorBroadcast.error_log ?? "[]");
+                  if (errors.length === 0) return <p className="text-sm text-gray-500">No error details available.</p>;
+                  return errors.map((e, i) => (
+                    <div key={i} className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm">
+                      <p className="font-medium text-red-800">{e.email}</p>
+                      <p className="mt-0.5 text-red-600">{e.error}</p>
+                    </div>
+                  ));
+                } catch {
+                  return <p className="text-sm text-gray-500">Could not parse error log.</p>;
+                }
+              })()}
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setErrorBroadcast(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {isFiltered && previewStudents.length > 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -693,7 +731,9 @@ export default function AdminBroadcastsPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-sm">{statusBadge(b.status)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{b.recipient_count}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{b.success_count}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{b.failure_count}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{b.failure_count > 0 ? (
+                      <button onClick={() => setErrorBroadcast(b)} className="font-medium text-red-600 hover:text-red-800 hover:underline">{b.failure_count}</button>
+                    ) : b.failure_count}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{b.sent_by_name}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{formatDate(b.sent_at)}</td>
                   </tr>
