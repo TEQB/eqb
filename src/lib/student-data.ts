@@ -175,6 +175,87 @@ export async function loadPublishedQuestionCounts(
   return counts;
 }
 
+export interface PendingSharedRequest {
+  id: string;
+  course_id: string;
+  programme_id: string;
+  requester_id: string;
+  action_type: "join" | "leave";
+  created_at: string;
+  course: {
+    code: string;
+    title: string;
+    level: number;
+  };
+  requester: {
+    full_name: string;
+  };
+  voteCounts: {
+    approve: number;
+    reject: number;
+  };
+  userVoted: boolean;
+  userVote: string | null;
+}
+
+export async function loadPendingSharedRequests(
+  programmeId: string,
+  profileId: string,
+): Promise<PendingSharedRequest[]> {
+  const service = createServiceClient();
+  const { data: raw } = await (service as any)
+    .from("shared_course_requests")
+    .select("*, course:course_id!inner(code, title, level), requester:requester_id!inner(full_name)")
+    .eq("programme_id", programmeId)
+    .eq("status", "pending");
+
+  const rows = (raw ?? []) as Array<{
+    id: string;
+    course_id: string;
+    programme_id: string;
+    requester_id: string;
+    action_type: string;
+    created_at: string;
+    course: { code: string; title: string; level: number };
+    requester: { full_name: string };
+  }>;
+
+  if (rows.length === 0) return [];
+
+  const requestIds = rows.map((r) => r.id);
+
+  const { data: voteRaw } = await (service as any)
+    .from("shared_course_votes")
+    .select("request_id, vote, voter_id")
+    .in("request_id", requestIds);
+
+  const votes = (voteRaw ?? []) as Array<{
+    request_id: string;
+    vote: string;
+    voter_id: string;
+  }>;
+
+  return rows.map((r) => {
+    const requestVotes = votes.filter((v) => v.request_id === r.id);
+    const approve = requestVotes.filter((v) => v.vote === "approve").length;
+    const reject = requestVotes.filter((v) => v.vote === "reject").length;
+    const userVote = requestVotes.find((v) => v.voter_id === profileId);
+    return {
+      id: r.id,
+      course_id: r.course_id,
+      programme_id: r.programme_id,
+      requester_id: r.requester_id,
+      action_type: r.action_type as "join" | "leave",
+      created_at: r.created_at,
+      course: r.course,
+      requester: r.requester,
+      voteCounts: { approve, reject },
+      userVoted: !!userVote,
+      userVote: userVote?.vote ?? null,
+    };
+  });
+}
+
 export async function loadStudentFeedbackCount(
   supabase: Client,
   profileId: string,

@@ -47,7 +47,8 @@ export default async function DashboardPage({
     ? parseInt(searchParams.level)
     : profile.current_level;
 
-  const filteredCourses = programmeCourses.filter((c) => c.level === selectedLevel);
+  const filteredGeneral = generalCourses.filter((c) => c.level === selectedLevel);
+  const filteredProgramme = programmeCourses.filter((c) => c.level === selectedLevel);
 
   return (
     <div className="space-y-8">
@@ -81,22 +82,28 @@ export default async function DashboardPage({
       </div>
 
       <section className="animate-fade-in-up stagger-1">
-        <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-gray-500">
-          General Courses
-        </h3>
-        <CourseGrid courses={generalCourses} />
-      </section>
-
-      <section className="animate-fade-in-up stagger-2">
         <div className="mb-4">
           <LevelTabs
             levels={levels}
             activeLevel={selectedLevel}
           />
         </div>
+        <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-gray-500">
+          General Courses
+        </h3>
         <CourseGrid
-          courses={filteredCourses}
-          emptyMessage="No courses found for this level."
+          courses={filteredGeneral}
+          emptyMessage="No general courses found for this level."
+        />
+      </section>
+
+      <section className="animate-fade-in-up stagger-2">
+        <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-gray-500">
+          Programme Courses
+        </h3>
+        <CourseGrid
+          courses={filteredProgramme}
+          emptyMessage="No programme courses found for this level."
         />
       </section>
 

@@ -17,14 +17,6 @@ interface StudentProfile {
   daysRemaining: number;
 }
 
-interface Course {
-  id: string;
-  code: string;
-  title: string;
-  level: number;
-  scope: "departmental" | "shared" | "general";
-}
-
 const ProfileContext = createContext<StudentProfile | null>(null);
 
 export function useProfile() {
@@ -34,20 +26,12 @@ export function useProfile() {
 interface StudentLayoutClientProps {
   profile: StudentProfile;
   feedbackCount: number;
-  programmeName: string;
-  availableLevels: number[];
-  generalCourses: Course[];
-  programmeCourses: Course[];
   children: React.ReactNode;
 }
 
 export function StudentLayoutClient({
   profile,
   feedbackCount,
-  programmeName,
-  availableLevels,
-  generalCourses,
-  programmeCourses,
   children,
 }: StudentLayoutClientProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -61,11 +45,6 @@ export function StudentLayoutClient({
           sidebarCollapsed ? "w-16" : "w-60",
         )}>
           <Sidebar
-            generalCourses={generalCourses}
-            programmeCourses={programmeCourses}
-            programmeName={programmeName}
-            availableLevels={availableLevels}
-            currentLevel={profile.currentLevel}
             collapsed={sidebarCollapsed}
           />
         </aside>
@@ -73,11 +52,6 @@ export function StudentLayoutClient({
         <MobileSidebarSheet
           open={mobileMenuOpen}
           onOpenChange={setMobileMenuOpen}
-          generalCourses={generalCourses}
-          programmeCourses={programmeCourses}
-          programmeName={programmeName}
-          availableLevels={availableLevels}
-          currentLevel={profile.currentLevel}
         />
 
         <div className="flex flex-1 flex-col lg:h-screen lg:overflow-hidden">

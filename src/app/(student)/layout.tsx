@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { StudentLayoutClient } from "./StudentLayoutClient";
 import {
-  loadStudentCourseGroups,
   loadStudentFeedbackCount,
   loadStudentProfile,
   loadUploadObligationDays,
@@ -23,11 +22,7 @@ export default async function StudentLayout({
   const profile = await loadStudentProfile(supabase, user.id);
   if (!profile) redirect("/login");
 
-  const prog = profile.programme;
-  const [courseGroups, obligationDays] = await Promise.all([
-    loadStudentCourseGroups(supabase, profile.programme_id),
-    loadUploadObligationDays(supabase),
-  ]);
+  const obligationDays = await loadUploadObligationDays(supabase);
   const feedbackCount = await loadStudentFeedbackCount(supabase, profile.id);
 
   const daysRemaining = calculateDaysRemaining(
@@ -46,10 +41,6 @@ export default async function StudentLayout({
         daysRemaining,
       }}
       feedbackCount={feedbackCount}
-      programmeName={prog?.name || ""}
-      availableLevels={prog?.available_levels || []}
-      generalCourses={courseGroups.generalCourses}
-      programmeCourses={courseGroups.programmeCourses}
     >
       {children}
     </StudentLayoutClient>

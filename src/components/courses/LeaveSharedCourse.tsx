@@ -17,7 +17,7 @@ export function LeaveSharedCourse({
   onLeft,
 }: LeaveSharedCourseProps) {
   const [loading, setLoading] = useState(false);
-  const [left, setLeft] = useState(false);
+  const [state, setState] = useState<"idle" | "left" | "requested" | "pending">("idle");
 
   const handleLeave = async () => {
     setLoading(true);
@@ -27,18 +27,32 @@ export function LeaveSharedCourse({
       if (!res.ok) {
         throw new Error(data.error || "Failed to leave course");
       }
-      setLeft(true);
-      toast.success(`Left ${courseCode}`);
-      onLeft?.(courseId);
+      if (data.message === "not_linked") {
+        setState("left");
+        toast.info(`${courseCode} is not linked to your programme`);
+        onLeft?.(courseId);
+      } else if (data.message === "request_pending") {
+        setState("pending");
+        toast.info(`Removal request for ${courseCode} already pending`);
+      } else if (data.message === "request_created") {
+        setState("requested");
+        toast.success(`Request sent — needs 2 approvals to remove ${courseCode}`);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to leave course");
     }
     setLoading(false);
   };
 
-  if (left) {
+  if (state === "left") {
     return (
       <p className="text-xs text-gray-400 italic">Left shared course</p>
+    );
+  }
+
+  if (state === "requested" || state === "pending") {
+    return (
+      <p className="text-xs text-amber-600 italic">Removal pending — awaiting votes</p>
     );
   }
 
@@ -49,7 +63,7 @@ export function LeaveSharedCourse({
       disabled={loading}
       className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
     >
-      {loading ? "Leaving..." : `Remove ${programmeName}`}
+      {loading ? "Requesting..." : `Remove ${programmeName}`}
     </button>
   );
 }

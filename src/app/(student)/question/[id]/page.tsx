@@ -7,6 +7,7 @@ import { toast } from "@/components/ui/toaster";
 import { SolutionList } from "@/components/solutions/SolutionList";
 import { SolutionForm } from "@/components/solutions/SolutionForm";
 import { FlagModal } from "@/components/question/FlagModal";
+import { CopyLinkButton } from "@/components/question/CopyLinkButton";
 import { Badge } from "@/components/ui/badge";
 import { formatSession } from "@/lib/utils";
 import { ImageViewer } from "@/components/question/ImageViewer";
@@ -207,6 +208,7 @@ export default function QuestionPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <CopyLinkButton questionId={question.id} />
             <FlagModal questionId={question.id} />
           </div>
         </div>

@@ -19,7 +19,7 @@ export function JoinSharedCourse({
   variant = "banner",
 }: JoinSharedCourseProps) {
   const [loading, setLoading] = useState(false);
-  const [joined, setJoined] = useState(false);
+  const [state, setState] = useState<"idle" | "joined" | "requested" | "pending">("idle");
 
   const handleJoin = async () => {
     setLoading(true);
@@ -29,23 +29,35 @@ export function JoinSharedCourse({
       if (!res.ok) {
         throw new Error(data.error || "Failed to add course");
       }
-      setJoined(true);
       if (data.message === "already_added") {
+        setState("joined");
         toast.info(`${programmeName} already takes ${courseCode}`);
-      } else {
-        toast.success(`${programmeName} now takes ${courseCode}`);
+        onJoined?.(courseId);
+      } else if (data.message === "request_pending") {
+        setState("pending");
+        toast.info(`Approval for ${courseCode} already requested`);
+      } else if (data.message === "request_created") {
+        setState("requested");
+        toast.success(`Request sent — ${programmeName} needs 2 approvals to take ${courseCode}`);
       }
-      onJoined?.(courseId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add course");
     }
     setLoading(false);
   };
 
-  if (joined) {
+  if (state === "joined") {
     return (
       <p className="text-xs text-success-700">
         {programmeName} is linked to this course.
+      </p>
+    );
+  }
+
+  if (state === "requested" || state === "pending") {
+    return (
+      <p className="text-xs text-amber-700">
+        Approval pending — waiting for your programme-mates to vote.
       </p>
     );
   }
@@ -62,7 +74,7 @@ export function JoinSharedCourse({
           className="rounded border-gray-400 text-primary-600 focus:ring-primary-500"
         />
         <span>
-          {loading ? "Adding..." : `${programmeName} also takes this course`}
+          {loading ? "Requesting..." : `${programmeName} also takes this course`}
         </span>
       </label>
     );
@@ -79,7 +91,7 @@ export function JoinSharedCourse({
         disabled={loading}
         className="mt-2 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
       >
-        {loading ? "Adding..." : `${programmeName} also takes this course`}
+        {loading ? "Requesting..." : `${programmeName} also takes this course`}
       </button>
     </div>
   );

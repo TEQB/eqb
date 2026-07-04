@@ -1,26 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-interface Course {
-  id: string;
-  code: string;
-  title: string;
-  level: number;
-  scope: "departmental" | "shared" | "general";
-}
-
 interface SidebarProps {
-  generalCourses: Course[];
-  programmeCourses: Course[];
-  programmeName: string;
-  availableLevels: number[];
-  currentLevel: number;
   collapsed?: boolean;
   onClose?: () => void;
 }
@@ -63,6 +49,15 @@ const mainNav = [
     ),
   },
   {
+    href: "/contributions",
+    label: "My Contributions",
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile",
     label: "Profile",
     icon: (
@@ -83,24 +78,12 @@ const mainNav = [
 ];
 
 export function Sidebar({
-  generalCourses,
-  programmeCourses,
-  programmeName,
-  availableLevels,
-  currentLevel,
   collapsed = false,
   onClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const [openLevel, setOpenLevel] = useState<number>(currentLevel);
-
-  const groupedByLevel = availableLevels.map((level) => ({
-    level,
-    courses: programmeCourses.filter((c) => c.level === level),
-  }));
 
   const isNavActive = (href: string) => pathname === href;
-  const isCourseActive = (id: string) => pathname === `/course/${id}`;
 
   return (
     <TooltipProvider delay={150}>
@@ -181,92 +164,6 @@ export function Sidebar({
           ))}
         </div>
       </div>
-
-      {!collapsed && (
-        <>
-          <div className="my-2 mx-4 h-px bg-gray-200" />
-
-          <div className="px-4 py-3">
-            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              General Courses
-            </p>
-            <div className="mt-2 space-y-0.5">
-              {generalCourses.length === 0 && (
-                <p className="px-3 py-2 text-sm text-gray-400">No general courses</p>
-              )}
-              {generalCourses.map((course) => (
-                <Link
-                  key={course.id}
-                  href={`/course/${course.id}`}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-all duration-fast",
-                    isCourseActive(course.id)
-                      ? "bg-secondary/15 font-medium text-primary ring-1 ring-secondary/20"
-                      : "text-gray-700 hover:bg-secondary/10 hover:text-secondary",
-                  )}
-                >
-                  <span className="font-mono text-xs text-gray-400">{course.code}</span>
-                  <span className="truncate">{course.title}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="my-2 mx-4 h-px bg-gray-200" />
-
-          <div className="px-4 py-3">
-            <p className="px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              {programmeName}
-            </p>
-            <div className="mt-2 space-y-1">
-              {groupedByLevel.map(({ level, courses }) => (
-                <div key={level}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenLevel(openLevel === level ? 0 : level)}
-                    className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition-all duration-fast hover:bg-secondary/10 hover:text-secondary"
-                  >
-                    <svg
-                      className={cn(
-                        "h-3.5 w-3.5 text-gray-400 transition-transform duration-normal",
-                        openLevel === level && "rotate-90",
-                      )}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
-                    </svg>
-                    {level} Level
-                    <span className="ml-auto text-xs text-gray-400">{courses.length}</span>
-                  </button>
-                  {openLevel === level && (
-                    <div className="ml-4 space-y-0.5 overflow-hidden animate-fade-in-down">
-                      {courses.map((course) => (
-                        <Link
-                          key={course.id}
-                          href={`/course/${course.id}`}
-                          onClick={onClose}
-                          className={cn(
-                            "flex items-center gap-2 rounded-2xl px-3 py-1.5 text-sm transition-all duration-fast",
-                            isCourseActive(course.id)
-                             ? "bg-secondary/15 font-medium text-primary ring-1 ring-secondary/20"
-                              : "text-gray-700 hover:bg-secondary/10 hover:text-secondary",
-                          )}
-                        >
-                          <span className="font-mono text-xs text-gray-400">{course.code}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
       </nav>
     </TooltipProvider>
   );

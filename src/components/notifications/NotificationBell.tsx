@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/toaster";
 
 type Notification = {
   id: string;
@@ -10,6 +11,7 @@ type Notification = {
   title: string;
   body: string | null;
   link: string | null;
+  metadata: Record<string, unknown> | null;
   is_read: boolean;
   created_at: string;
 };
@@ -112,6 +114,35 @@ export function NotificationBell({ light, onCountChange }: Props) {
     }
   };
 
+  const handleVote = async (notification: Notification, vote: "approve" | "reject") => {
+    const requestId = notification.metadata?.requestId as string | undefined;
+    if (!requestId) return;
+
+    try {
+      const res = await fetch("/api/courses/shared-vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, vote }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to vote");
+        return;
+      }
+
+      if (data.resolved) {
+        toast.success(data.message || "Request resolved");
+        handleMarkRead(notification.id);
+        fetchNotifications();
+      } else {
+        toast.success("Your vote has been recorded");
+        handleMarkRead(notification.id);
+      }
+    } catch {
+      toast.error("Failed to record vote");
+    }
+  };
+
   const formatTime = (value: string) => {
     const date = new Date(value);
     const now = new Date();
@@ -180,14 +211,35 @@ export function NotificationBell({ light, onCountChange }: Props) {
                     "border-b border-gray-50 px-4 py-3 transition-colors last:border-0",
                     !n.is_read && "bg-primary-50/40",
                   )}
-                  onClick={() => !n.is_read && handleMarkRead(n.id)}
                 >
-                  {n.link ? (
+                  {n.link && n.type !== "shared_course_vote_request" ? (
                     <Link href={n.link} className="block" onClick={() => setOpen(false)}>
                       <NotificationItem notification={n} formatTime={formatTime} />
                     </Link>
                   ) : (
                     <NotificationItem notification={n} formatTime={formatTime} />
+                  )}
+                  {n.type === "shared_course_vote_request" && !n.is_read && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVote(n, "approve");
+                        }}
+                        className="flex-1 rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 transition-colors"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVote(n, "reject");
+                        }}
+                        className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   )}
                 </div>
               ))
