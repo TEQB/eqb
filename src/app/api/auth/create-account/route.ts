@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       supabase.auth.admin.createUser({
         email,
         password,
-        email_confirm: false,
+        email_confirm: true, // email ownership already verified via OTP earlier in registration
         user_metadata: {
           full_name: reg.full_name,
           matric_number: reg.matric_number,

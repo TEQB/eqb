@@ -60,7 +60,7 @@ export function SetPasswordForm() {
       return;
     }
 
-    toast.success("Account created! Check your email to confirm your address, then sign in.");
+    toast.success("Account created! You can now sign in.");
     const params = new URLSearchParams({ confirmed: email });
     window.location.href = `/login?${params}`;
   };
