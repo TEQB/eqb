@@ -1804,7 +1804,7 @@ Return JSON only.`;
 
         let studentFilterQuery = service
           .from("profiles")
-          .select("id, auth_user_id, full_name")
+          .select("id, auth_user_id, full_name, matric_number, current_level, programme_id")
           .eq("role", "student");
 
         if (student_ids && student_ids.length > 0) {
@@ -1823,7 +1823,7 @@ Return JSON only.`;
 
         const { data: rawStudents } = await studentFilterQuery;
 
-        const students = (rawStudents ?? []) as Array<{ id: string; auth_user_id: string; full_name: string }>;
+        const students = (rawStudents ?? []) as Array<{ id: string; auth_user_id: string; full_name: string; matric_number: string | null; current_level: number | null; programme_id: string | null }>;
 
         if (students.length === 0) {
           return NextResponse.json({ error: "No students found to send to" }, { status: 400 });
@@ -1837,6 +1837,14 @@ Return JSON only.`;
           }
         }
 
+        const { data: allProgrammes } = await service.from("programmes").select("id, name");
+        const programmeNameMap = new Map<string, string>();
+        if (allProgrammes) {
+          for (const p of allProgrammes) {
+            programmeNameMap.set(p.id, p.name);
+          }
+        }
+
         const { data: rawAdmin } = await service
           .from("profiles")
           .select("id")
@@ -1845,6 +1853,23 @@ Return JSON only.`;
         const adminProfile = rawAdmin as unknown as { id: string } | null;
         if (!adminProfile) {
           return NextResponse.json({ error: "Admin profile not found" }, { status: 500 });
+        }
+
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://eqb.info";
+        const replacePlaceholders = (
+          text: string,
+          student: { full_name: string; matric_number: string | null; current_level: number | null; programme_id: string | null },
+          email: string,
+          pMap: Map<string, string>,
+        ): string => {
+          const programme = student.programme_id ? pMap.get(student.programme_id) || "" : "";
+          return text
+            .replaceAll("{{full_name}}", student.full_name)
+            .replaceAll("{{matric_number}}", student.matric_number ?? "")
+            .replaceAll("{{email}}", email)
+            .replaceAll("{{programme}}", programme)
+            .replaceAll("{{level}}", String(student.current_level ?? ""))
+            .replaceAll("{{login_url}}", `${baseUrl}/login`);
         }
 
         let successCount = 0;
@@ -1860,7 +1885,9 @@ Return JSON only.`;
           }
           try {
             const broadcastFrom = process.env.ADMIN_INITIAL_EMAIL;
-            await sendEmail(email, subject, html_body, undefined, broadcastFrom);
+            const personalizedSubject = replacePlaceholders(subject, student, email, programmeNameMap);
+            const personalizedBody = replacePlaceholders(html_body, student, email, programmeNameMap);
+            await sendEmail(email, personalizedSubject, personalizedBody, undefined, broadcastFrom);
             successCount++;
           } catch (err) {
             failureCount++;

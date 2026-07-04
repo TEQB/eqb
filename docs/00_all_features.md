@@ -213,6 +213,14 @@ In short, the platform is built to **run itself**. The admin panel exists mainly
 - Import **course and question data** from external sources or partner databases.
 - Map external data fields to the platform's format.
 
+### Broadcast Emails
+- **Send a one-time email** to all students or a filtered subset (by faculty, programme, level, or specific students picked via search).
+- Supports HTML formatting with a toolbar (bold, italic, underline, headings, lists).
+- **Personalisation**: use placeholders like `{{full_name}}`, `{{matric_number}}`, `{{email}}`, `{{programme}}`, `{{level}}` in the subject or body — they're replaced with each student's actual data when sent.
+- Shows a live recipient count and preview before sending.
+- Sends via cascading email providers (Resend → Brevo → Mailjet) for reliability.
+- A history of past broadcasts is displayed on the Broadcast page.
+
 ### Email Templates
 - **View and edit** the content of all automated emails:
   - Verification email, password reset, upload approved/rejected, etc.

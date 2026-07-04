@@ -556,7 +556,7 @@ export default function AdminBroadcastsPage() {
               />
             </div>
             <p className="mt-1 text-xs text-gray-400">
-              HTML is supported. You can also type HTML tags directly.
+              HTML is supported. You can also type HTML tags directly.               Available placeholders: <code className="text-primary-600">{`{{full_name}}`}</code> <code className="text-primary-600">{`{{matric_number}}`}</code> <code className="text-primary-600">{`{{email}}`}</code> <code className="text-primary-600">{`{{programme}}`}</code> <code className="text-primary-600">{`{{level}}`}</code> <code className="text-primary-600">{`{{login_url}}`}</code>
             </p>
           </div>
 
