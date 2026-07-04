@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { testEmailSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
-import { sendViaResend, sendViaBrevo } from "@/lib/mailer";
+import { sendViaResend, sendViaBrevo, sendViaMailjet } from "@/lib/mailer";
+
+async function assertAdmin() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const service = createServiceClient();
+  const { data: rawProfile } = await service
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .single();
+  const profile = rawProfile as unknown as { role: string } | null;
+  if (profile?.role !== "super_admin") return null;
+  return true;
+}
 
 export async function POST(req: NextRequest) {
   const ip =
@@ -8,14 +26,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-real-ip") ||
     "unknown";
 
-  const body = await req.json().catch(() => ({}));
-  const testEmail = typeof body.email === "string" && body.email.includes("@")
-    ? body.email.trim()
-    : null;
+  const isAdmin = await assertAdmin();
+  if (!isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!testEmail) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = testEmailSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json({ error: "A valid email address is required" }, { status: 400 });
   }
+  const testEmail = parsed.data.email;
 
   const subject = "EQB Test Email";
   const html = `<!DOCTYPE html>
@@ -62,7 +83,7 @@ export async function POST(req: NextRequest) {
     logger.error({ event: "test.resend_failed", message: "Test email via Resend failed", metadata: { to: testEmail, error: msg } });
   }
 
-  // Test Brevo (only if not already successful via Resend)
+  // Test Brevo
   try {
     const start = Date.now();
     await sendViaBrevo(testEmail, subject, html);
@@ -73,12 +94,29 @@ export async function POST(req: NextRequest) {
     logger.error({ event: "test.brevo_failed", message: "Test email via Brevo failed", metadata: { to: testEmail, error: msg } });
   }
 
-  const allSuccessful = results.resend?.status === "success" && results.brevo?.status === "success";
-  const anySuccessful = results.resend?.status === "success" || results.brevo?.status === "success";
+  // Test Mailjet
+  try {
+    const start = Date.now();
+    await sendViaMailjet(testEmail, subject, html);
+    results.mailjet = { status: "success", message: "Email sent via Mailjet", durationMs: Date.now() - start };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    results.mailjet = { status: "failed", message: msg };
+    logger.error({ event: "test.mailjet_failed", message: "Test email via Mailjet failed", metadata: { to: testEmail, error: msg } });
+  }
+
+  const allSuccessful =
+    results.resend?.status === "success" &&
+    results.brevo?.status === "success" &&
+    results.mailjet?.status === "success";
+  const anySuccessful =
+    results.resend?.status === "success" ||
+    results.brevo?.status === "success" ||
+    results.mailjet?.status === "success";
 
   logger.info({
     event: "test.email.completed",
-    message: "Email provider test completed",
+    message: "Email provider test completed (all three providers)",
     metadata: { to: testEmail, results, ip },
   });
 
@@ -88,10 +126,10 @@ export async function POST(req: NextRequest) {
       allProvidersTested: true,
       results,
       summary: allSuccessful
-        ? "Both providers working correctly"
+        ? "All three providers working correctly"
         : anySuccessful
         ? "At least one provider working"
-        : "Both providers failed — check logs",
+        : "Resend, Brevo, and Mailjet all failed — check logs",
     },
     { status: anySuccessful ? 200 : 500 },
   );

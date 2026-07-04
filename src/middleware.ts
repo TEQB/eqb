@@ -2,9 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Coarse edge-only first pass for /api/auth POST traffic.
-// Per-route checkDbRateLimit (persistent) is the primary defense — do not rely on this alone.
-// In-memory state does not survive across serverless instances; kept as a cheap burst absorber.
+// ── Rate limiting (edge in-memory burst absorber) ──
 const authRateLimitMap = new Map<
   string,
   { count: number; windowStart: number }
@@ -32,8 +30,66 @@ function checkAuthRateLimit(ip: string): {
   return { allowed: true, retryAfterSeconds: 0 };
 }
 
+// ── Unusual traffic detection ──
+const SUSPICIOUS_PATHS = [
+  "/wp-admin", "/wp-login", "/xmlrpc.php", "/.env", "/.git",
+  "/administrator", "/phpmyadmin",
+  "..%2f", "..\\", "%00",
+];
+
+const SUSPICIOUS_USER_AGENTS = [
+  "sqlmap", "nikto", "nmap", "nessus", "openvas",
+  "burpsuite", "acunetix", "netsparker", "webinspect",
+  "curl", "wget", "python-requests", "go-http-client",
+];
+
+function isSuspiciousTraffic(request: NextRequest): boolean {
+  const path = request.nextUrl.pathname.toLowerCase();
+  const segments = path.split("/").filter(Boolean);
+  const ua = (request.headers.get("user-agent") || "").toLowerCase();
+
+  for (const pattern of SUSPICIOUS_PATHS) {
+    if (path.includes(pattern.toLowerCase())) return true;
+  }
+
+  // Block attempts to access /admin routes without the secret path
+  if (segments.includes("admin")) {
+    const adminSecret = process.env.ADMIN_SECRET_PATH?.toLowerCase();
+    if (!adminSecret || !segments.includes(adminSecret)) {
+      return true;
+    }
+  }
+
+  // Shell/command injection in path segments
+  for (const seg of segments) {
+    if (seg.includes(";") || seg.includes("|") || seg.includes("`") || seg.includes("$(")) {
+      return true;
+    }
+  }
+
+  for (const pattern of SUSPICIOUS_USER_AGENTS) {
+    if (ua.includes(pattern)) return true;
+  }
+
+  const query = request.nextUrl.search.toLowerCase();
+  if (query.includes("alert(") || query.includes("<script")) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, protocol } = request.nextUrl;
+
+  // ── Suspicious traffic detection ──
+  if (isSuspiciousTraffic(request)) {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    console.log(
+      `[EQB] ${JSON.stringify({ t: new Date().toISOString(), lvl: "warn", ev: "security.suspicious", msg: "Suspicious traffic blocked", ip, p: pathname, ua: (request.headers.get("user-agent") || "unknown").slice(0, 100) })}`,
+    );
+    return new NextResponse(null, { status: 403 });
+  }
 
   // ── HTTPS redirect (production only) ──
   if (

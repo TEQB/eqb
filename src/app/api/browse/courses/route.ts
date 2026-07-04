@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { loadCoursesForProgramme } from "@/lib/student-data";
+import { validateUUID } from "@/lib/utils";
 
 export const revalidate = 300;
 
@@ -13,8 +14,8 @@ export async function GET(req: NextRequest) {
   }
 
   const programmeId = req.nextUrl.searchParams.get("programme_id");
-  if (!programmeId) {
-    return NextResponse.json({ error: "programme_id is required" }, { status: 400 });
+  if (!programmeId || !validateUUID(programmeId)) {
+    return NextResponse.json({ error: "A valid programme_id is required" }, { status: 400 });
   }
 
   const service = createServiceClient();

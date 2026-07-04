@@ -24,6 +24,7 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "X-DNS-Prefetch-Control", value: "on" },
+      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://qcxmyqdmqenrynehdeci.supabase.co; font-src 'self'; connect-src 'self' https://qcxmyqdmqenrynehdeci.supabase.co https://api.resend.com https://api.brevo.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
         ],
       },
       {

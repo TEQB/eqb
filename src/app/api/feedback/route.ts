@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkDbRateLimit } from "@/lib/utils";
+import { checkDbRateLimit, sanitizePlainText } from "@/lib/utils";
+import { feedbackSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
 import { getAdminRecipientEmails } from "@/lib/admin-recipients";
 import { sendEmail } from "@/lib/mailer";
@@ -25,20 +26,15 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const parsed = feedbackSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Please write at least 10 characters." },
+        { status: 400 },
+      );
+    }
 
-    if (message.length < 10) {
-      return NextResponse.json(
-        { error: "Please write at least 10 characters." },
-        { status: 400 },
-      );
-    }
-    if (message.length > 2000) {
-      return NextResponse.json(
-        { error: "Feedback is too long." },
-        { status: 400 },
-      );
-    }
+    const message = sanitizePlainText(parsed.data.message, 2000);
 
     const rateKey = `feedback:${user.id}:${ip}`;
     if (!(await checkDbRateLimit(rateKey, 5, 60_000))) {

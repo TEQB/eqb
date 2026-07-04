@@ -111,6 +111,24 @@ export function sanitizeHtml(input: string): string {
     .replace(/'/g, "&#x27;");
 }
 
+export function sanitizePlainText(input: string, maxLength = 5000): string {
+  if (typeof input !== "string") return "";
+  return input
+    .replace(/[<>]/g, "")
+    .replace(/[\0\x08\x09\x1a\n\r"'\\]/g, "")
+    .replace(/[\x00-\x1f]/g, "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+export function sanitizeFilename(input: string): string {
+  return input.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 255);
+}
+
+export function validateUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function deriveLevelAndSemesterFromCode(code: string): { level: number; semester: "first" | "second" } | null {
   const digits = code.replace(/\D/g, "");
   if (digits.length < 3) return null;

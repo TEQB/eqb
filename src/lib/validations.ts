@@ -105,3 +105,40 @@ export const moderateSchema = z.object({
   courseCode: z.string().min(1).max(20),
   courseName: z.string().min(1).max(200),
 });
+
+export const adminLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const createAccountSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const testEmailSchema = z.object({
+  email: z.string().email(),
+});
+
+export const feedbackSchema = z.object({
+  message: z.string().min(10).max(2000),
+});
+
+export const uuidParamSchema = z.string().uuid();
+
+export const adminActionSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1).max(200).optional(),
+  code: z.string().min(1).max(20).optional(),
+  title: z.string().min(1).max(200).optional(),
+  level: z.preprocess(
+    (v) => (v ? Number(v) : v),
+    z.number().int().min(100).max(600).optional(),
+  ),
+  email: z.string().email().optional(),
+  facultyId: z.string().uuid().optional(),
+  programmeId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  questionId: z.string().uuid().optional(),
+  solutionId: z.string().uuid().optional(),
+});

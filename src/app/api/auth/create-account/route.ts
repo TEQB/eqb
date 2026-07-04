@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit } from "@/lib/utils";
+import { createAccountSchema } from "@/lib/validations";
 import { validatePassword } from "@/lib/password";
 import { logger } from "@/lib/logger";
 import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
@@ -13,11 +14,13 @@ export async function POST(req: Request) {
     "unknown";
 
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      logger.warn({ event: "account.create.invalid_input", message: "Missing email or password", ip });
+    const body = await req.json();
+    const parsed = createAccountSchema.safeParse(body);
+    if (!parsed.success) {
+      logger.warn({ event: "account.create.invalid_input", message: "Invalid account creation input", ip });
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
     }
+    const { email, password } = parsed.data;
 
     const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
     if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {

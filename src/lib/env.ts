@@ -13,6 +13,8 @@ const RECOMMENDED = [
   "RESEND_FROM_EMAIL",
   "ADMIN_INITIAL_EMAIL",
   "BREVO_API_KEY",
+  "MAILJET_API_KEY",
+  "MAILJET_SECRET_KEY",
 ] as const;
 
 export function validateEnv(): string[] {

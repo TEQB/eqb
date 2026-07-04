@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { validateUUID } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const supabase = createClient();
   const facultyId = req.nextUrl.searchParams.get("faculty_id");
+  if (facultyId && !validateUUID(facultyId)) {
+    return NextResponse.json({ error: "Invalid faculty_id" }, { status: 400 });
+  }
 
   let query = supabase
     .from("programmes")

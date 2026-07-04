@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isValidSemester } from "@/lib/utils";
+import { isValidSemester, validateUUID } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const courseId = req.nextUrl.searchParams.get("courseId");
@@ -9,11 +9,7 @@ export async function GET(req: NextRequest) {
   const offsetParam = req.nextUrl.searchParams.get("offset") || "0";
   const limitParam = req.nextUrl.searchParams.get("limit") || "20";
 
-  if (!courseId) {
-    return NextResponse.json({ error: "Missing courseId" }, { status: 400 });
-  }
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)) {
+  if (!courseId || !validateUUID(courseId)) {
     return NextResponse.json({ error: "Invalid courseId" }, { status: 400 });
   }
 

@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { queryLogs, getLogStats } from "@/lib/db-logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
+import { validateUUID } from "@/lib/utils";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -155,7 +156,8 @@ export async function GET(req: NextRequest) {
           query = query.eq("courses.level", parseInt(level));
         }
         if (search) {
-          query = query.or(`courses.code.ilike.%${search}%,courses.title.ilike.%${search}%`);
+          const cleanSearch = search.replace(/[%_]/g, "").slice(0, 100);
+          query = query.or(`courses.code.ilike.%${cleanSearch}%,courses.title.ilike.%${cleanSearch}%`);
         }
 
         const { data: rawQuestions, count, error } = await query
@@ -294,8 +296,8 @@ export async function GET(req: NextRequest) {
 
       case "question-solutions": {
         const questionId = req.nextUrl.searchParams.get("question_id");
-        if (!questionId) {
-          return NextResponse.json({ error: "question_id required" }, { status: 400 });
+        if (!questionId || !validateUUID(questionId)) {
+          return NextResponse.json({ error: "Valid question_id required" }, { status: 400 });
         }
         const { data: rawSolutions } = await service
           .from("solutions")
@@ -457,9 +459,9 @@ export async function POST(req: NextRequest) {
       case "seed-programme": {
         const name = formData.get("name") as string;
         const faculty_id = formData.get("faculty_id") as string;
-        if (!name || !faculty_id) {
+        if (!name || !faculty_id || !validateUUID(faculty_id)) {
           return NextResponse.json(
-            { error: "Name and faculty_id required" },
+            { error: "Name and valid faculty_id required" },
             { status: 400 },
           );
         }
@@ -507,8 +509,8 @@ export async function POST(req: NextRequest) {
 
       case "restore-question": {
         const id = formData.get("id") as string;
-        if (!id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id || !validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid question ID" }, { status: 400 });
         }
         const { error } = await service
           .from("past_questions")
@@ -521,8 +523,8 @@ export async function POST(req: NextRequest) {
 
       case "suspend-question": {
         const id = formData.get("id") as string;
-        if (!id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id || !validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid question ID" }, { status: 400 });
         }
         const { error } = await service
           .from("past_questions")
@@ -535,8 +537,8 @@ export async function POST(req: NextRequest) {
 
       case "delete-question": {
         const id = formData.get("id") as string;
-        if (!id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id || !validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid question ID" }, { status: 400 });
         }
         const { data: rawQuestionForDelete } = await service
           .from("past_questions")
@@ -558,8 +560,8 @@ export async function POST(req: NextRequest) {
 
       case "lock-student": {
         const id = formData.get("id") as string;
-        if (!id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id || !validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid student ID" }, { status: 400 });
         }
         const { error } = await service
           .from("profiles")
@@ -572,8 +574,8 @@ export async function POST(req: NextRequest) {
 
       case "unlock-student": {
         const id = formData.get("id") as string;
-        if (!id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id || !validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid student ID" }, { status: 400 });
         }
         const { error } = await service
           .from("profiles")
@@ -787,8 +789,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const file_url = formData.get("file_url") as string;
         const file_type = formData.get("file_type") as string;
         const question_id = formData.get("question_id") as string;
-        if (!course_id || !year || !semester || !file_url || !file_type || !question_id) {
-          return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        if (!course_id || !validateUUID(course_id) || !year || !semester || !file_url || !file_type || !question_id || !validateUUID(question_id)) {
+          return NextResponse.json({ error: "Missing or invalid required fields" }, { status: 400 });
         }
         const { data: rawCourse } = await service
           .from("courses")
@@ -928,7 +930,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       case "update-faculty": {
         const faculty_id = formData.get("id") as string;
         const name = formData.get("name") as string;
-        if (!faculty_id || !name) {
+        if (!faculty_id || !validateUUID(faculty_id) || !name) {
           return NextResponse.json({ error: "ID and name required" }, { status: 400 });
         }
         const slug = name.toLowerCase().replace(/\s+/g, "-");
@@ -942,7 +944,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const programme_id = formData.get("id") as string;
         const name = formData.get("name") as string;
         const faculty_id = formData.get("faculty_id") as string;
-        if (!programme_id || !name) {
+        if (!programme_id || !validateUUID(programme_id) || !name) {
           return NextResponse.json({ error: "ID and name required" }, { status: 400 });
         }
         const slug = name.toLowerCase().replace(/\s+/g, "-");
@@ -959,7 +961,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const code = formData.get("code") as string;
         const title = formData.get("title") as string;
         const level = parseInt(formData.get("level") as string);
-        if (!course_id || !code || !title || !level) {
+        if (!course_id || !validateUUID(course_id) || !code || !title || !level) {
           return NextResponse.json({ error: "All fields required" }, { status: 400 });
         }
         const { error } = await service.from("courses").update({
@@ -975,7 +977,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       case "update-course-scope": {
         const scopeCourseId = jsonBody?.course_id as string;
         const newScope = jsonBody?.scope as string;
-        if (!scopeCourseId || !newScope || !["departmental", "shared", "general"].includes(newScope)) {
+        if (!scopeCourseId || !validateUUID(scopeCourseId) || !newScope || !["departmental", "shared", "general"].includes(newScope)) {
           return NextResponse.json({ error: "course_id and valid scope required" }, { status: 400 });
         }
         const { error: scopeErr } = await service.from("courses").update({ scope: newScope } as never).eq("id", scopeCourseId);
@@ -987,8 +989,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       case "add-programme-course": {
         const pcCourseId = jsonBody?.course_id as string;
         const pcProgrammeId = jsonBody?.programme_id as string;
-        if (!pcCourseId || !pcProgrammeId) {
-          return NextResponse.json({ error: "course_id and programme_id required" }, { status: 400 });
+        if (!pcCourseId || !validateUUID(pcCourseId) || !pcProgrammeId || !validateUUID(pcProgrammeId)) {
+          return NextResponse.json({ error: "Valid course_id and programme_id required" }, { status: 400 });
         }
         const { error: addErr } = await service.from("programme_courses").insert({
           programme_id: pcProgrammeId,
@@ -1002,8 +1004,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       case "remove-programme-course": {
         const rmCourseId = jsonBody?.course_id as string;
         const rmProgrammeId = jsonBody?.programme_id as string;
-        if (!rmCourseId || !rmProgrammeId) {
-          return NextResponse.json({ error: "course_id and programme_id required" }, { status: 400 });
+        if (!rmCourseId || !validateUUID(rmCourseId) || !rmProgrammeId || !validateUUID(rmProgrammeId)) {
+          return NextResponse.json({ error: "Valid course_id and programme_id required" }, { status: 400 });
         }
         const { error: rmErr } = await service
           .from("programme_courses")
@@ -1021,7 +1023,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const semester = formData.get("semester") as string;
         const exam_type = formData.get("exam_type") as string;
         const level = parseInt(formData.get("level") as string);
-        if (!question_id || !year || !semester || !exam_type || !level) {
+        if (!question_id || !validateUUID(question_id) || !year || !semester || !exam_type || !level) {
           return NextResponse.json({ error: "All fields required" }, { status: 400 });
         }
         const { error } = await service.from("past_questions").update({
@@ -1042,8 +1044,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
       case "delete-faculty": {
         const faculty_id = formData.get("id") as string;
-        if (!faculty_id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!faculty_id || !validateUUID(faculty_id)) {
+          return NextResponse.json({ error: "Invalid faculty ID" }, { status: 400 });
         }
         await service.from("programmes").delete().eq("faculty_id", faculty_id);
         const { error } = await service.from("faculties").delete().eq("id", faculty_id);
@@ -1054,8 +1056,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
       case "delete-programme": {
         const programme_id = formData.get("id") as string;
-        if (!programme_id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!programme_id || !validateUUID(programme_id)) {
+          return NextResponse.json({ error: "Invalid programme ID" }, { status: 400 });
         }
 
         const { data: rawAdminProfile } = await service
@@ -1079,8 +1081,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
       case "delete-course": {
         const course_id = formData.get("id") as string;
-        if (!course_id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!course_id || !validateUUID(course_id)) {
+          return NextResponse.json({ error: "Invalid course ID" }, { status: 400 });
         }
         const { error } = await service.from("courses").delete().eq("id", course_id);
         if (error) throw error;
@@ -1090,8 +1092,8 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
       case "delete-solution": {
         const solution_id = formData.get("id") as string;
-        if (!solution_id) {
-          return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!solution_id || !validateUUID(solution_id)) {
+          return NextResponse.json({ error: "Invalid solution ID" }, { status: 400 });
         }
         const { data: rawSolution } = await service
           .from("solutions")

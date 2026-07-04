@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkDbRateLimit } from "@/lib/utils";
+import { adminLoginSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
@@ -9,10 +10,13 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
+    const body = await req.json();
+    const parsed = adminLoginSchema.safeParse(body);
+    if (!parsed.success) {
+      logger.warn({ event: "admin_login.invalid_input", message: "Invalid admin login input", ip });
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
     }
+    const { email, password } = parsed.data;
 
     const rateKey = `admin-login:${ip}:${email.toLowerCase()}`;
     if (!(await checkDbRateLimit(rateKey, 5, 60_000))) {
