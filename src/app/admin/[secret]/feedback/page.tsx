@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { MarkFeedbackRead } from "@/components/admin/MarkFeedbackRead";
 
 type FeedbackMessage = {
   id: string;
@@ -171,6 +172,8 @@ export default async function AdminFeedbackPage({
           </div>
         )}
       </section>
+
+      <MarkFeedbackRead feedbackIds={messages.map((m) => m.id)} />
     </div>
   );
 }

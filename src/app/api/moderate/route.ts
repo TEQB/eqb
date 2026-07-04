@@ -5,6 +5,7 @@ import { validateFile, checkDbRateLimit } from "@/lib/utils";
 import { moderateSchema } from "@/lib/validations";
 import { logger } from "@/lib/logger";
 import { moderateWithFailover } from "@/lib/moderation-providers";
+import { notifyAdmins, createNotification, notifyCourseStudents } from "@/lib/notifications";
 
 const RATE_LIMIT = 3;
 const RATE_WINDOW_MS = 60_000;
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
 
     const { data: rawQuestion } = await service
       .from("past_questions")
-      .select("file_url, file_type, uploaded_by, status, year, semester")
+      .select("file_url, file_type, uploaded_by, status, year, semester, course_id")
       .eq("id", questionId)
       .single();
     const question = rawQuestion as unknown as {
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
       status: string;
       year: number;
       semester: string;
+      course_id: string;
     } | null;
 
     if (!question) {
@@ -81,6 +83,13 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
+
+    notifyAdmins({
+      type: "question_pending_review",
+      title: `New question pending review: ${courseCode}`,
+      body: `${courseName} — ${question.year}/${Number(question.year) + 1} session`,
+      link: `/admin/${process.env.ADMIN_SECRET_PATH || "admin"}/questions`,
+    });
 
     const { data: fileData } = await service.storage
       .from("pending")
@@ -163,6 +172,15 @@ Return JSON only.`;
         .from("past_questions")
         .update({ status: "rejected", ai_rejection_reason: "Review could not be completed — please re-upload" } as never)
         .eq("id", questionId);
+
+      createNotification({
+        user_id: question.uploaded_by,
+        type: "question_rejected",
+        title: `Your ${courseCode} question could not be reviewed`,
+        body: "The review system encountered an error. Please try uploading again.",
+        link: `/upload?retry=true`,
+      });
+
       return NextResponse.json(
         { pass: false, reason: "Review could not be completed — please re-upload" },
         { status: 200 },
@@ -273,6 +291,22 @@ Return JSON only.`;
       }
 
       logger.info({ event: "moderate.passed", message: "Question passed moderation", userId: user.id, metadata: { questionId, pageCount: allPages.length }, durationMs: Date.now() - start });
+
+      createNotification({
+        user_id: question.uploaded_by,
+        type: "question_published",
+        title: `Your ${courseCode} question was approved`,
+        body: `The ${question.semester} semester ${question.year}/${Number(question.year) + 1} question is now published.`,
+        link: `/questions/${questionId}`,
+      });
+
+      notifyCourseStudents(question.course_id, {
+        type: "question_published",
+        title: `New question available: ${courseCode}`,
+        body: `A ${question.semester} semester ${question.year}/${Number(question.year) + 1} question has been published.`,
+        link: `/questions/${questionId}`,
+      });
+
       return NextResponse.json({ pass: true, reason: "" });
     } else {
       const { data: allPages } = await service
@@ -294,6 +328,15 @@ Return JSON only.`;
         .eq("id", questionId);
 
       logger.info({ event: "moderate.rejected", message: "Question rejected by AI", userId: user.id, metadata: { questionId, reason: verdict.reason }, durationMs: Date.now() - start });
+
+      createNotification({
+        user_id: question.uploaded_by,
+        type: "question_rejected",
+        title: `Your ${courseCode} question was not approved`,
+        body: verdict.reason,
+        link: `/upload?retry=true`,
+      });
+
       return NextResponse.json({ pass: false, reason: verdict.reason });
     }
   } catch (error) {

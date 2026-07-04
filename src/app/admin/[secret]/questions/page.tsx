@@ -278,6 +278,7 @@ export default function AdminQuestionsPage({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="px-4 py-3 font-medium text-gray-500 w-10">#</th>
               <th className="px-5 py-3 font-medium text-gray-500">Course Code</th>
               <th className="px-5 py-3 font-medium text-gray-500">Course Name</th>
               <th className="px-5 py-3 font-medium text-gray-500">Programme</th>
@@ -292,8 +293,8 @@ export default function AdminQuestionsPage({
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-gray-100">
-                  {Array.from({ length: 8 }).map((_, j) => (
-                    <td key={j} className="px-5 py-4">
+                  {Array.from({ length: 9 }).map((_, j) => (
+                    <td key={j} className="px-4 py-4">
                       <div className="h-4 animate-pulse rounded bg-gray-100" />
                     </td>
                   ))}
@@ -301,7 +302,7 @@ export default function AdminQuestionsPage({
               ))
             ) : questions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center">
+                <td colSpan={9} className="px-5 py-12 text-center">
                   <div className="flex flex-col items-center">
                     <svg className="mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -311,8 +312,9 @@ export default function AdminQuestionsPage({
                 </td>
               </tr>
             ) : (
-              questions.map((q) => (
+              questions.map((q, idx) => (
                 <tr key={q.id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
+                  <td className="px-4 py-4 text-gray-400 text-xs">{startItem + idx}</td>
                   <td className="px-5 py-4 font-medium text-gray-900">
                     {q.courses?.code || q.course_id?.slice(0, 8)}
                   </td>

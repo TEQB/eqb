@@ -120,6 +120,17 @@ export const testEmailSchema = z.object({
   email: z.string().email(),
 });
 
+export const broadcastSchema = z.object({
+  subject: z.string().min(1, "Subject is required").max(200, "Subject too long"),
+  html_body: z.string().min(1, "Message body is required").max(50000, "Message too long"),
+  faculty_id: z.string().uuid().optional().nullable(),
+  programme_id: z.string().uuid().optional().nullable(),
+  level: z.preprocess(
+    (v) => (v ? Number(v) : undefined),
+    z.number().int().min(100).max(600).optional(),
+  ),
+});
+
 export const feedbackSchema = z.object({
   message: z.string().min(10).max(2000),
 });

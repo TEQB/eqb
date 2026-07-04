@@ -83,6 +83,56 @@ export default function AdminLogsPage() {
 
   const hasFilters = levelFilter || eventFilter || ipFilter || dateFrom || dateTo || searchText;
 
+  const exportLogs = async () => {
+    try {
+      const params = new URLSearchParams({ action: "list-logs", export: "true", limit: "50000" });
+      if (levelFilter) params.set("level", levelFilter);
+      if (eventFilter) params.set("event", eventFilter);
+      if (ipFilter) params.set("ip", ipFilter);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      if (searchText) params.set("search", searchText);
+
+      const res = await fetch(`/api/admin?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch logs");
+      const data = await res.json();
+      const rows = data.logs ?? [];
+
+      const headers = ["Timestamp", "Level", "Event", "Message", "User", "IP", "Duration (ms)", "Path", "Method", "Error"];
+      const csvRows = [headers.join(",")];
+      for (const log of rows) {
+        const escape = (v: unknown) => {
+          const s = String(v ?? "");
+          return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        csvRows.push([
+          escape(log.created_at),
+          escape(log.level),
+          escape(log.event),
+          escape(log.message),
+          escape(log.user_email || log.user_id || ""),
+          escape(log.ip || ""),
+          escape(log.duration_ms != null ? String(log.duration_ms) : ""),
+          escape(log.path || ""),
+          escape(log.method || ""),
+          escape(log.error_message || ""),
+        ].join(","));
+      }
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${rows.length} log entries`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Export failed";
+      toast.error(msg);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -90,6 +140,15 @@ export default function AdminLogsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Activity Logs</h1>
           <p className="mt-1 text-sm text-gray-500">{total.toLocaleString()} total entries</p>
         </div>
+        <button
+          onClick={exportLogs}
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Export CSV
+        </button>
       </div>
 
       {/* Filter Bar */}

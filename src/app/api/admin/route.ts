@@ -6,6 +6,9 @@ import { queryLogs, getLogStats } from "@/lib/db-logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/supabase/admin-retry";
 import { validateUUID } from "@/lib/utils";
+import { sendEmail } from "@/lib/mailer";
+import { broadcastSchema } from "@/lib/validations";
+import { createNotification, notifyAdmins } from "@/lib/notifications";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -234,12 +237,74 @@ export async function GET(req: NextRequest) {
       }
 
       case "students": {
-        const { data: raw } = await service
+        const facultyFilter = req.nextUrl.searchParams.get("faculty_id");
+        const programmeFilter = req.nextUrl.searchParams.get("programme_id");
+        const levelFilter = req.nextUrl.searchParams.get("level");
+        const search = req.nextUrl.searchParams.get("search");
+
+        let programmeIds: string[] | undefined;
+        if (facultyFilter && validateUUID(facultyFilter)) {
+          const { data: programmes } = await service
+            .from("programmes")
+            .select("id")
+            .eq("faculty_id", facultyFilter);
+          programmeIds = (programmes ?? []).map((p: unknown) => (p as { id: string }).id);
+          if (programmeIds.length === 0) {
+            return NextResponse.json({ students: [] });
+          }
+        }
+
+        let query = service
           .from("profiles")
-          .select("id, full_name, matric_number, is_locked, current_level, created_at")
-          .eq("role", "student")
-          .order("created_at", { ascending: false });
-        return NextResponse.json({ students: raw ?? [] });
+          .select("id, full_name, matric_number, is_locked, lock_reason, current_level, created_at, programme_id")
+          .eq("role", "student");
+
+        if (programmeIds && programmeIds.length > 0) {
+          query = query.in("programme_id", programmeIds);
+        }
+        if (programmeFilter && validateUUID(programmeFilter)) {
+          query = query.eq("programme_id", programmeFilter);
+        }
+        if (levelFilter) {
+          const ln = parseInt(levelFilter);
+          if (!isNaN(ln)) query = query.eq("current_level", ln);
+        }
+        if (search) {
+          query = query.or(`full_name.ilike.%${search}%,matric_number.ilike.%${search}%`);
+        }
+
+        const { data: raw } = await query.order("created_at", { ascending: false });
+
+        // Build programme/faculty lookup map
+        const programmeIdsToFetch = Array.from(new Set((raw ?? []).map((r: unknown) => (r as { programme_id: string }).programme_id).filter(Boolean)));
+        const progMap = new Map<string, { name: string; faculty_name: string }>();
+        if (programmeIdsToFetch.length > 0) {
+          const { data: progData } = await service
+            .from("programmes")
+            .select("id, name, faculties!inner(name)")
+            .in("id", programmeIdsToFetch);
+          for (const p of (progData ?? []) as unknown as Array<{ id: string; name: string; faculties: { name: string } }>) {
+            progMap.set(p.id, { name: p.name, faculty_name: p.faculties?.name || "" });
+          }
+        }
+
+        const students = (raw ?? []).map((r: unknown) => {
+          const s = r as { id: string; full_name: string; matric_number: string; is_locked: boolean; lock_reason: string | null; current_level: number; created_at: string; programme_id: string | null };
+          const prog = s.programme_id ? progMap.get(s.programme_id) : null;
+          return {
+            id: s.id,
+            full_name: s.full_name,
+            matric_number: s.matric_number,
+            is_locked: s.is_locked,
+            lock_reason: s.lock_reason,
+            current_level: s.current_level,
+            created_at: s.created_at,
+            programme_id: s.programme_id,
+            programme_name: prog?.name || null,
+            faculty_name: prog?.faculty_name || null,
+          };
+        });
+        return NextResponse.json({ students });
       }
 
       case "faculties": {
@@ -346,8 +411,11 @@ export async function GET(req: NextRequest) {
       }
 
       case "list-logs": {
+        const isExport = req.nextUrl.searchParams.get("export") === "true";
         const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
-        const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 200);
+        const limit = isExport
+          ? Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "10000", 10), 50000)
+          : Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 200);
         const level = req.nextUrl.searchParams.get("level") || undefined;
         const event = req.nextUrl.searchParams.get("event") || undefined;
         const userId = req.nextUrl.searchParams.get("userId") || undefined;
@@ -399,6 +467,86 @@ export async function GET(req: NextRequest) {
           dailyQuestions: Object.entries(questionsByDay).map(([date, count]) => ({ date, count })),
           dailySolutions: Object.entries(solutionsByDay).map(([date, count]) => ({ date, count })),
           dailySignups: Object.entries(signupsByDay).map(([date, count]) => ({ date, count })),
+        });
+      }
+
+      case "list-broadcast-recipients": {
+        const facultyFilter = req.nextUrl.searchParams.get("faculty_id") || null;
+        const programmeFilter = req.nextUrl.searchParams.get("programme_id") || null;
+        const levelFilter = req.nextUrl.searchParams.get("level") ? parseInt(req.nextUrl.searchParams.get("level")!) : null;
+
+        let query = service
+          .from("profiles")
+          .select("id, auth_user_id, full_name, matric_number, current_level, programme_id, programmes!inner(name, faculty_id, faculties!inner(name))")
+          .eq("role", "student");
+
+        if (facultyFilter) {
+          query = (query as any).eq("programmes.faculty_id", facultyFilter);
+        }
+        if (programmeFilter) {
+          query = query.eq("programme_id", programmeFilter);
+        }
+        if (levelFilter) {
+          query = query.eq("current_level", levelFilter);
+        }
+
+        const { data: rawStudents, count } = await (query as any)
+          .select("id", { count: "exact", head: false })
+          .order("created_at", { ascending: false })
+          .limit(0);
+
+        const totalCount = count ?? 0;
+
+        const { data: rawPreview } = await (query as any)
+          .select("id, full_name, matric_number, current_level, programme_id, programmes!inner(name, faculty_id, faculties!inner(name))")
+          .eq("role", "student")
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        const students = ((rawPreview ?? []) as Array<{
+          id: string; full_name: string; matric_number: string; current_level: number;
+          programme_id: string; programmes: { name: string; faculty_id: string; faculties: { name: string } };
+        }>).map((s) => ({
+          id: s.id,
+          full_name: s.full_name,
+          matric_number: s.matric_number,
+          current_level: s.current_level,
+          programme_name: s.programmes?.name || "Unknown",
+          faculty_name: s.programmes?.faculties?.name || "Unknown",
+        }));
+
+        return NextResponse.json({ total: totalCount, students });
+      }
+
+      case "list-broadcasts": {
+        const { data: raw } = await (service as any)
+          .from("broadcasts")
+          .select("id, subject, recipient_count, success_count, failure_count, status, created_at, sent_at, sent_by")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        const broadcasts = (raw ?? []) as Array<{
+          id: string; subject: string; recipient_count: number; success_count: number;
+          failure_count: number; status: string; created_at: string | null; sent_at: string | null; sent_by: string;
+        }>;
+
+        const profileIds = Array.from(new Set(broadcasts.map((b) => b.sent_by)));
+        let profileRows: unknown[] = [];
+        if (profileIds.length > 0) {
+          const { data } = await service
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", profileIds);
+          profileRows = (data as unknown[] | null) ?? [];
+        }
+        const profiles = profileRows as Array<{ id: string; full_name: string }>;
+        const nameMap = new Map(profiles.map((p) => [p.id, p.full_name]));
+
+        return NextResponse.json({
+          broadcasts: broadcasts.map((b) => ({
+            ...b,
+            sent_by_name: nameMap.get(b.sent_by) || "Unknown",
+          })),
         });
       }
 
@@ -512,12 +660,32 @@ export async function POST(req: NextRequest) {
         if (!id || !validateUUID(id)) {
           return NextResponse.json({ error: "Invalid question ID" }, { status: 400 });
         }
+        const { data: restoreQuestion } = await service
+          .from("past_questions")
+          .select("uploaded_by, course_id")
+          .eq("id", id)
+          .single();
+        const restoreQ = restoreQuestion as unknown as { uploaded_by: string; course_id: string } | null;
         const { error } = await service
           .from("past_questions")
           .update({ status: "published" } as never)
           .eq("id", id);
         if (error) throw error;
         logger.info({ event: "admin.restore_question", message: "Question restored", userId: user.id, metadata: { questionId: id } });
+        if (restoreQ) {
+          createNotification({
+            user_id: restoreQ.uploaded_by,
+            type: "question_published",
+            title: "Your question has been restored",
+            body: "An admin reviewed and restored your question. It is now visible to students.",
+            link: `/questions/${id}`,
+          });
+          notifyAdmins({
+            type: "question_published",
+            title: "Question restored by admin",
+            body: `Question ${id.slice(0, 8)} was restored from suspension.`,
+          });
+        }
         return NextResponse.json({ success: true });
       }
 
@@ -526,12 +694,32 @@ export async function POST(req: NextRequest) {
         if (!id || !validateUUID(id)) {
           return NextResponse.json({ error: "Invalid question ID" }, { status: 400 });
         }
+        const { data: suspendQuestion } = await service
+          .from("past_questions")
+          .select("uploaded_by, course_id")
+          .eq("id", id)
+          .single();
+        const suspendQ = suspendQuestion as unknown as { uploaded_by: string; course_id: string } | null;
         const { error } = await service
           .from("past_questions")
           .update({ status: "suspended" } as never)
           .eq("id", id);
         if (error) throw error;
         logger.info({ event: "admin.suspend_question", message: "Question suspended", userId: user.id, metadata: { questionId: id } });
+        if (suspendQ) {
+          createNotification({
+            user_id: suspendQ.uploaded_by,
+            type: "question_suspended",
+            title: "Your question has been suspended",
+            body: "An admin has suspended your question. It is no longer visible to students.",
+            link: `/questions/${id}`,
+          });
+          notifyAdmins({
+            type: "question_suspended",
+            title: "Question suspended by admin",
+            body: `Question ${id.slice(0, 8)} was suspended.`,
+          });
+        }
         return NextResponse.json({ success: true });
       }
 
@@ -560,15 +748,16 @@ export async function POST(req: NextRequest) {
 
       case "lock-student": {
         const id = formData.get("id") as string;
+        const lock_reason = formData.get("lock_reason") as string || null;
         if (!id || !validateUUID(id)) {
           return NextResponse.json({ error: "Invalid student ID" }, { status: 400 });
         }
         const { error } = await service
           .from("profiles")
-          .update({ is_locked: true } as never)
+          .update({ is_locked: true, lock_reason } as never)
           .eq("id", id);
         if (error) throw error;
-        logger.info({ event: "admin.lock_student", message: "Student locked", userId: user.id, metadata: { studentId: id } });
+        logger.info({ event: "admin.lock_student", message: "Student locked", userId: user.id, metadata: { studentId: id, lock_reason } });
         return NextResponse.json({ success: true });
       }
 
@@ -579,10 +768,32 @@ export async function POST(req: NextRequest) {
         }
         const { error } = await service
           .from("profiles")
-          .update({ is_locked: false } as never)
+          .update({ is_locked: false, lock_reason: null } as never)
           .eq("id", id);
         if (error) throw error;
         logger.info({ event: "admin.unlock_student", message: "Student unlocked", userId: user.id, metadata: { studentId: id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "mark-feedback-read": {
+        const feedbackId = formData.get("id") as string;
+        if (!feedbackId || !validateUUID(feedbackId)) {
+          return NextResponse.json({ error: "Invalid feedback ID" }, { status: 400 });
+        }
+        const { error } = await service
+          .from("feedback_messages")
+          .update({ is_read: true } as never)
+          .eq("id", feedbackId);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
+      case "mark-all-feedback-read": {
+        const { error } = await service
+          .from("feedback_messages")
+          .update({ is_read: true } as never)
+          .eq("is_read" as never, false);
+        if (error) throw error;
         return NextResponse.json({ success: true });
       }
 
@@ -1531,6 +1742,108 @@ Return JSON only.`;
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
         return NextResponse.json({ url: data.signedUrl });
+      }
+
+      case "send-broadcast": {
+        const parsed = broadcastSchema.safeParse(jsonBody);
+        if (!parsed.success) {
+          return NextResponse.json({ error: parsed.error.errors[0]?.message || "Invalid input" }, { status: 400 });
+        }
+
+        const { subject, html_body, faculty_id, programme_id, level } = parsed.data;
+
+        let studentFilterQuery = (service as any)
+          .from("profiles")
+          .select("id, auth_user_id, full_name, programme_id, programmes!inner(faculty_id)")
+          .eq("role", "student");
+
+        if (faculty_id) {
+          studentFilterQuery = studentFilterQuery.eq("programmes.faculty_id", faculty_id);
+        }
+        if (programme_id) {
+          studentFilterQuery = studentFilterQuery.eq("programme_id", programme_id);
+        }
+        if (level) {
+          studentFilterQuery = studentFilterQuery.eq("current_level", level);
+        }
+
+        const { data: rawStudents } = await studentFilterQuery;
+
+        const students = (rawStudents ?? []) as Array<{ id: string; auth_user_id: string; full_name: string }>;
+
+        if (students.length === 0) {
+          return NextResponse.json({ error: "No students found to send to" }, { status: 400 });
+        }
+
+        const authResult = await service.auth.admin.listUsers({ perPage: 1000 });
+        const emailMap = new Map<string, string>();
+        if (authResult.data?.users) {
+          for (const u of authResult.data.users) {
+            if (u.id && u.email) emailMap.set(u.id, u.email);
+          }
+        }
+
+        const { data: rawAdmin } = await service
+          .from("profiles")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .single();
+        const adminProfile = rawAdmin as unknown as { id: string } | null;
+        if (!adminProfile) {
+          return NextResponse.json({ error: "Admin profile not found" }, { status: 500 });
+        }
+
+        let successCount = 0;
+        let failureCount = 0;
+        const errors: Array<{ email: string; error: string }> = [];
+
+        for (const student of students) {
+          const email = emailMap.get(student.auth_user_id);
+          if (!email) {
+            failureCount++;
+            errors.push({ email: student.auth_user_id, error: "No email found in auth" });
+            continue;
+          }
+          try {
+            await sendEmail(email, subject, html_body);
+            successCount++;
+          } catch (err) {
+            failureCount++;
+            errors.push({ email, error: err instanceof Error ? err.message : String(err) });
+          }
+        }
+
+        for (const student of students) {
+          createNotification({
+            user_id: student.id,
+            type: "broadcast",
+            title: subject,
+            body: "A new broadcast has been sent to you.",
+            metadata: { broadcast: true },
+          });
+        }
+
+        const status = failureCount === 0 ? "completed" : successCount > 0 ? "partial" : "failed";
+
+        await (service as any).from("broadcasts").insert({
+          subject,
+          html_body,
+          sent_by: adminProfile.id,
+          recipient_count: students.length,
+          success_count: successCount,
+          failure_count: failureCount,
+          status,
+          error_log: JSON.stringify(errors),
+        } as never);
+
+        logger.info({
+          event: "admin.send_broadcast",
+          message: "Broadcast sent",
+          userId: user.id,
+          metadata: { subject, total: students.length, success: successCount, failure: failureCount, status },
+        });
+
+        return NextResponse.json({ success: true, total: students.length, successCount, failureCount, status });
       }
 
       default:

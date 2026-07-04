@@ -6,6 +6,7 @@ import { useState, useRef, useCallback } from "react";
 import { SearchBar } from "@/components/browse/SearchBar";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Search, PanelLeftClose, PanelLeft, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -134,6 +135,7 @@ export function Header({ onMenuClick, onSidebarToggle, sidebarCollapsed, userNam
               </span>
             )}
           </Link>
+          <NotificationBell light />
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/15 text-sm font-medium text-white outline-none transition-transform hover:-translate-y-0.5 hover:bg-white/20 focus-visible:ring-4 focus-visible:ring-secondary/30">
               {initial}

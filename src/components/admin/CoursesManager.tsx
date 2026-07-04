@@ -133,7 +133,7 @@ export function CoursesManager() {
             </p>
           </div>
         ) : (
-          filtered.map((course) => {
+          filtered.map((course, idx) => {
             const linkedProgrammeIds = new Set(
               course.programme_courses?.map((pc: ProgrammeCourse) => pc.programme_id) ?? []
             );
@@ -146,6 +146,7 @@ export function CoursesManager() {
                 <div className="flex flex-wrap items-start gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
                       <span className="font-semibold text-gray-900">{course.code}</span>
                       <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
                         Lvl {course.level}

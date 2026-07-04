@@ -10,7 +10,8 @@ export default async function AdminDashboardPage({
   const service = createServiceClient();
   const { count: feedbackCount } = await service
     .from("feedback_messages")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("is_read" as never, false);
 
   return (
     <div className="space-y-6">
