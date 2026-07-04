@@ -1781,7 +1781,16 @@ Return JSON only.`;
           return NextResponse.json({ error: parsed.error.errors[0]?.message || "Invalid input" }, { status: 400 });
         }
 
-        const { subject, html_body, faculty_id, programme_id, level, student_ids } = parsed.data;
+        const { subject, faculty_id, programme_id, level, student_ids } = parsed.data;
+        let { html_body } = parsed.data;
+
+        // Convert plain-text newlines to HTML if body contains no HTML tags
+        if (!/<[a-z][\s\S]*>/i.test(html_body)) {
+          html_body = html_body
+            .split(/\n\n+/)
+            .map((p) => `<p>${p.split("\n").join("<br>")}</p>`)
+            .join("");
+        }
 
         // Resolve faculty filter to programme IDs
         let programmeIds: string[] | undefined;
