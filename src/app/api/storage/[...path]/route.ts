@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { applyWatermark } from "@/lib/watermark";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { path: string[] } },
 ) {
   const rawPath = params.path.join("/");
@@ -54,10 +55,30 @@ export async function GET(
     pdf: "application/pdf",
   };
 
-  return new NextResponse(data, {
+  const wantsWatermark = req.nextUrl.searchParams.get("wm") === "1";
+  const isImage = ext === "jpg" || ext === "jpeg" || ext === "png";
+
+  let responseBody: Blob = data;
+
+  if (wantsWatermark && isImage) {
+    try {
+      const buffer = Buffer.from(await data.arrayBuffer());
+      const wmBuffer = await applyWatermark(buffer);
+      const ab = wmBuffer.buffer as ArrayBuffer;
+      responseBody = new Blob([ab], {
+        type: mimeTypes[ext || ""] || "application/octet-stream",
+      });
+    } catch {
+      // Never fail over a watermarking bug — fall back to plain image.
+    }
+  }
+
+  return new NextResponse(responseBody, {
     headers: {
       "Content-Type": mimeTypes[ext || ""] || "application/octet-stream",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": wantsWatermark
+        ? "public, max-age=3600"
+        : "public, max-age=31536000, immutable",
     },
   });
 }

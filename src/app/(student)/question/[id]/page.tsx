@@ -215,6 +215,10 @@ export default function QuestionPage({
       </div>
 
       {/* File Viewer(s) */}
+      <div
+        className="exam-content-protected"
+        onContextMenu={(e) => e.preventDefault()}
+      >
       <div className="animate-fade-in-up stagger-2 space-y-4">
         {pages.map((page) => (
           <div key={page.id} className="rounded-2xl border border-gray-200 bg-white">
@@ -251,6 +255,7 @@ export default function QuestionPage({
             )}
           </div>
         ))}
+      </div>
       </div>
 
       <hr className="animate-fade-in border-white/70" />

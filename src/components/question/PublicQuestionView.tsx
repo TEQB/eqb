@@ -56,6 +56,10 @@ export function PublicQuestionView({
     window.location.href = `/question/${questionId}`;
   }, [questionId]);
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
   if (!page) return null;
 
   return (
@@ -87,7 +91,10 @@ export function PublicQuestionView({
         </div>
       </header>
 
-      <div className="flex flex-1 items-center justify-center overflow-hidden min-h-0 relative">
+      <div
+        className="flex flex-1 items-center justify-center overflow-hidden min-h-0 relative exam-content-protected"
+        onContextMenu={handleContextMenu}
+      >
         {pages.length > 1 && currentPageIndex > 0 && (
           <button
             onClick={goPrev}
@@ -121,7 +128,7 @@ export function PublicQuestionView({
         ) : (
           <div className="flex items-center justify-center h-full w-full p-4">
             <ImageViewer
-              src={`/api/storage/${page.file_url}`}
+              src={`/api/storage/${page.file_url}?wm=1`}
               alt={`Past question ${formatSession(year)} — page ${page.page_number}`}
             />
           </div>

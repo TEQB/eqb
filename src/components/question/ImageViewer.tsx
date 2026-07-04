@@ -234,8 +234,9 @@ function ZoomableContainer({
       tabIndex={0}
       aria-label="Tap to open full screen, drag to pan when zoomed"
     >
-      <div className="flex items-center justify-center">
+      <div className="relative flex items-center justify-center">
         {children}
+        <div className="pointer-events-none absolute inset-0 z-10" aria-hidden="true" />
       </div>
     </div>
   );
