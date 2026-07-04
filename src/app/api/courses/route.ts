@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { logger } from "@/lib/logger";
 
 const createCourseSchema = z.object({
-  code: z.string().min(2).max(20).transform((v) => v.replace(/\s+/g, "")).pipe(z.string().regex(/^[A-Za-z]{2,4}\d{3,4}$/, "Invalid course code format")),
+  code: z.string().min(2).max(20).regex(/^[A-Za-z]{2,4}\s?\d{3,4}$/, "Invalid course code format (e.g. ENT212 or ENT 212)"),
   title: z.string().min(2).max(200).trim(),
   level: z.union([z.number(), z.string()]),
   scope: z.enum(["departmental", "shared", "general", "programme_specific"]).optional(),
