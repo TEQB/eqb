@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatSession } from "@/lib/utils";
 import { ImageViewer } from "@/components/question/ImageViewer";
 import { LazyMount } from "@/components/ui/LazyMount";
+import { AiEnhancementNote } from "@/components/question/AiEnhancementNote";
 import {
   Dialog,
   DialogContent,
@@ -257,6 +258,8 @@ export default function QuestionPage({
         ))}
       </div>
       </div>
+
+      <AiEnhancementNote />
 
       <hr className="animate-fade-in border-white/70" />
 

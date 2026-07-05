@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ImageViewer } from "@/components/question/ImageViewer";
+import { AiEnhancementNote } from "@/components/question/AiEnhancementNote";
 import { formatSession } from "@/lib/utils";
 
 interface QuestionPage {
@@ -135,22 +136,25 @@ export function PublicQuestionView({
         )}
       </div>
 
-      {pages.length > 1 && (
-        <footer className="flex shrink-0 items-center justify-center gap-1.5 px-4 py-3">
-          {pages.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => setCurrentPageIndex(i)}
-              className={`h-1.5 rounded-full transition-all ${
-                i === currentPageIndex
-                  ? "w-6 bg-white"
-                  : "w-1.5 bg-white/30 hover:bg-white/50"
-              }`}
-              aria-label={`Go to page ${p.page_number}`}
-            />
-          ))}
-        </footer>
-      )}
+      <footer className="shrink-0 px-4 py-3 flex flex-col items-center gap-2">
+        {pages.length > 1 && (
+          <div className="flex items-center justify-center gap-1.5">
+            {pages.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => setCurrentPageIndex(i)}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === currentPageIndex
+                    ? "w-6 bg-white"
+                    : "w-1.5 bg-white/30 hover:bg-white/50"
+                }`}
+                aria-label={`Go to page ${p.page_number}`}
+              />
+            ))}
+          </div>
+        )}
+        <AiEnhancementNote />
+      </footer>
     </div>
   );
 }
