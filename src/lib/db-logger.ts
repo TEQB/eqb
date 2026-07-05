@@ -57,6 +57,7 @@ export async function queryLogs(params: {
   level?: string;
   event?: string;
   userId?: string;
+  userEmail?: string;
   ip?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -70,6 +71,7 @@ export async function queryLogs(params: {
     level,
     event,
     userId,
+    userEmail,
     ip,
     dateFrom,
     dateTo,
@@ -86,6 +88,7 @@ export async function queryLogs(params: {
   if (level) query = query.eq("level", level);
   if (event) query = query.ilike("event", `%${event}%`);
   if (userId) query = query.eq("user_id", userId);
+  if (userEmail) query = query.ilike("user_email", `%${userEmail}%`);
   if (ip) query = query.eq("ip", ip);
   if (dateFrom) query = query.gte("created_at", dateFrom);
   if (dateTo) query = query.lte("created_at", dateTo + "T23:59:59.999Z");

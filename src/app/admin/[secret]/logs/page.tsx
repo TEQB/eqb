@@ -36,6 +36,7 @@ export default function AdminLogsPage() {
 
   const [levelFilter, setLevelFilter] = useState("");
   const [eventFilter, setEventFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
   const [ipFilter, setIpFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -49,6 +50,7 @@ export default function AdminLogsPage() {
       const params = new URLSearchParams({ page: String(pg), limit: String(limit) });
       if (levelFilter) params.set("level", levelFilter);
       if (eventFilter) params.set("event", eventFilter);
+      if (userFilter) params.set("userEmail", userFilter);
       if (ipFilter) params.set("ip", ipFilter);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
@@ -66,7 +68,7 @@ export default function AdminLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [limit, levelFilter, eventFilter, ipFilter, dateFrom, dateTo, searchText]);
+  }, [limit, levelFilter, eventFilter, userFilter, ipFilter, dateFrom, dateTo, searchText]);
 
   useEffect(() => {
     fetchLogs(1);
@@ -75,19 +77,21 @@ export default function AdminLogsPage() {
   const clearFilters = () => {
     setLevelFilter("");
     setEventFilter("");
+    setUserFilter("");
     setIpFilter("");
     setDateFrom("");
     setDateTo("");
     setSearchText("");
   };
 
-  const hasFilters = levelFilter || eventFilter || ipFilter || dateFrom || dateTo || searchText;
+  const hasFilters = levelFilter || eventFilter || userFilter || ipFilter || dateFrom || dateTo || searchText;
 
   const exportLogs = async () => {
     try {
       const params = new URLSearchParams({ action: "list-logs", export: "true", limit: "50000" });
       if (levelFilter) params.set("level", levelFilter);
       if (eventFilter) params.set("event", eventFilter);
+      if (userFilter) params.set("userEmail", userFilter);
       if (ipFilter) params.set("ip", ipFilter);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
@@ -170,6 +174,14 @@ export default function AdminLogsPage() {
             placeholder="Event name..."
             value={eventFilter}
             onChange={(e) => setEventFilter(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-44"
+          />
+
+          <input
+            type="text"
+            placeholder="User email..."
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
             className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-44"
           />
 

@@ -419,12 +419,13 @@ export async function GET(req: NextRequest) {
         const level = req.nextUrl.searchParams.get("level") || undefined;
         const event = req.nextUrl.searchParams.get("event") || undefined;
         const userId = req.nextUrl.searchParams.get("userId") || undefined;
+        const userEmail = req.nextUrl.searchParams.get("userEmail") || undefined;
         const ip = req.nextUrl.searchParams.get("ip") || undefined;
         const dateFrom = req.nextUrl.searchParams.get("dateFrom") || undefined;
         const dateTo = req.nextUrl.searchParams.get("dateTo") || undefined;
         const search = req.nextUrl.searchParams.get("search") || undefined;
 
-        const { logs, total } = await queryLogs({ page, limit, level, event, userId, ip, dateFrom, dateTo, search, excludeEventPrefix: "admin.", excludePathPrefix: "/admin/" });
+        const { logs, total } = await queryLogs({ page, limit, level, event, userId, userEmail, ip, dateFrom, dateTo, search, excludeEventPrefix: "admin.", excludePathPrefix: "/admin/" });
         return NextResponse.json({ logs, total, page, limit });
       }
 
