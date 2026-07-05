@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PaginatedCourseGrid } from "@/components/browse/PaginatedCourseGrid";
 import { JoinSharedCourse } from "@/components/courses/JoinSharedCourse";
@@ -180,12 +181,20 @@ export default async function BrowsePage({
                   <p className="text-sm text-gray-600">{course.title}</p>
                   <p className="text-xs text-gray-400">Level {course.level}</p>
                 </div>
-                <JoinSharedCourse
-                  courseId={course.id}
-                  courseCode={course.code}
-                  programmeName={programmeName}
-                  variant="inline"
-                />
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/course/${course.id}`}
+                    className="rounded-2xl border border-secondary/30 bg-transparent px-3 py-1.5 text-xs font-medium text-secondary transition-all duration-fast hover:bg-secondary/10 hover:text-primary"
+                  >
+                    View
+                  </Link>
+                  <JoinSharedCourse
+                    courseId={course.id}
+                    courseCode={course.code}
+                    programmeName={programmeName}
+                    variant="inline"
+                  />
+                </div>
               </li>
             ))}
           </ul>

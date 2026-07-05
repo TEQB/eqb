@@ -123,6 +123,35 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ courses: list ?? [] });
       }
 
+      case "student-stats": {
+        const [{ count: totalStudents }, { count: activeStudents }, { count: lockedStudents }] = await Promise.all([
+          service.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
+          service.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student").eq("is_locked", false),
+          service.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student").eq("is_locked", true),
+        ]);
+
+        const { data: levelData } = await service
+          .from("profiles")
+          .select("current_level")
+          .eq("role", "student")
+          .not("current_level", "is", null);
+
+        const levelCounts: Record<number, number> = {};
+        if (levelData) {
+          for (const r of levelData as Array<{ current_level: number }>) {
+            const lvl = r.current_level;
+            levelCounts[lvl] = (levelCounts[lvl] || 0) + 1;
+          }
+        }
+
+        return NextResponse.json({
+          total: totalStudents ?? 0,
+          active: activeStudents ?? 0,
+          locked: lockedStudents ?? 0,
+          levels: levelCounts,
+        });
+      }
+
       case "queue": {
         const { data: raw } = await service
           .from("past_questions")

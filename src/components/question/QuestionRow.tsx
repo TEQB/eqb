@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { CopyLinkButton } from "@/components/question/CopyLinkButton";
 import { formatSession } from "@/lib/utils";
 
 interface QuestionRowProps {
@@ -50,6 +51,7 @@ export function QuestionRow({
         >
           View
         </Link>
+        <CopyLinkButton questionId={id} />
       </div>
     </div>
   );

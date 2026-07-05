@@ -39,6 +39,13 @@ export function StudentsTable({ secret: _secret }: { secret: string }) {
   const [programmeFilter, setProgrammeFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
 
+  const [stats, setStats] = useState<{
+    total: number;
+    active: number;
+    locked: number;
+    levels: Record<string, number>;
+  } | null>(null);
+
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
   const [lockTarget, setLockTarget] = useState<Student | null>(null);
   const [lockReason, setLockReason] = useState("");
@@ -47,9 +54,11 @@ export function StudentsTable({ secret: _secret }: { secret: string }) {
     Promise.all([
       fetch("/api/admin?action=faculties").then((r) => r.json()),
       fetch("/api/admin?action=list-programmes").then((r) => r.json()),
-    ]).then(([fData, pData]) => {
+      fetch("/api/admin?action=student-stats").then((r) => r.json()),
+    ]).then(([fData, pData, sData]) => {
       if (fData.faculties) setFaculties(fData.faculties);
       if (pData.programmes) setProgrammes(pData.programmes);
+      if (sData) setStats(sData);
     });
   }, []);
 
@@ -141,6 +150,33 @@ export function StudentsTable({ secret: _secret }: { secret: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Stat Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Total Students</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{stats.total.toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Active</p>
+            <p className="mt-1 text-2xl font-bold text-success-600">{stats.active.toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Locked</p>
+            <p className="mt-1 text-2xl font-bold text-danger-600">{stats.locked.toLocaleString()}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">By Level</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">
+              {Object.entries(stats.levels)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([lvl, count]) => `${lvl}L: ${count}`)
+                .join(" · ")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3">
         <select

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Faculty { id: string; name: string }
@@ -108,6 +109,7 @@ function CourseSelector({
 }
 
 export function ExploreClient({ initialFaculties }: ExploreClientProps) {
+  const router = useRouter();
   const [selectedFaculty, setSelectedFaculty] = useState("");
   const [selectedProgramme, setSelectedProgramme] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
@@ -123,11 +125,15 @@ export function ExploreClient({ initialFaculties }: ExploreClientProps) {
     setSelectedCourse("");
   }, []);
 
+  const handleCourseChange = useCallback((id: string) => {
+    setSelectedCourse(id);
+  }, []);
+
   useEffect(() => {
     if (selectedCourse) {
-      window.location.href = `/course/${selectedCourse}`;
+      router.push(`/course/${selectedCourse}`);
     }
-  }, [selectedCourse]);
+  }, [selectedCourse, router]);
 
   return (
     <div className="grid gap-5 sm:grid-cols-3">
@@ -155,7 +161,7 @@ export function ExploreClient({ initialFaculties }: ExploreClientProps) {
       <Suspense fallback={<SelectSkeleton />}>
         <CourseSelector
           selectedProgramme={selectedProgramme}
-          onCourseChange={(id) => setSelectedCourse(id)}
+          onCourseChange={handleCourseChange}
         />
       </Suspense>
     </div>
