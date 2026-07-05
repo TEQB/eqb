@@ -64,6 +64,7 @@ export async function queryLogs(params: {
   search?: string;
   excludeEventPrefix?: string;
   excludePathPrefix?: string;
+  excludeUserIds?: string[];
 }): Promise<{ logs: never[]; total: number }> {
   const {
     page = 1,
@@ -78,6 +79,7 @@ export async function queryLogs(params: {
     search,
     excludeEventPrefix,
     excludePathPrefix,
+    excludeUserIds,
   } = params;
 
   const supabase = createServiceClient();
@@ -102,6 +104,9 @@ export async function queryLogs(params: {
   if (excludePathPrefix) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = (query as unknown as { or: (filter: string) => any }).or(`path.not.ilike.${excludePathPrefix}%,path.is.null`) as typeof query;
+  }
+  if (excludeUserIds && excludeUserIds.length > 0) {
+    query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`);
   }
 
   const { data, error, count } = await query
