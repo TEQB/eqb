@@ -20,6 +20,10 @@ export function CoursesManager() {
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ code: "", title: "", level: 0 });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadData = async () => {
     const [cRes, pRes] = await Promise.all([
@@ -88,6 +92,65 @@ export function CoursesManager() {
     await loadData();
   };
 
+  const startEditing = (course: Course) => {
+    setEditingId(course.id);
+    setEditForm({ code: course.code, title: course.title, level: course.level });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditForm({ code: "", title: "", level: 0 });
+  };
+
+  const handleSave = async () => {
+    if (!editingId) return;
+    if (!editForm.code.trim() || !editForm.title.trim() || !editForm.level) {
+      toast.error("Code, title, and level are required");
+      return;
+    }
+    setSaving(true);
+    const fd = new FormData();
+    fd.append("id", editingId);
+    fd.append("code", editForm.code.trim());
+    fd.append("title", editForm.title.trim());
+    fd.append("level", String(editForm.level));
+    const res = await fetch("/api/admin?action=update-course", {
+      method: "POST",
+      body: fd,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = await res.json();
+      toast.error(data.error || "Failed to update course");
+      return;
+    }
+    toast.success("Course updated");
+    cancelEditing();
+    await loadData();
+  };
+
+  const handleDelete = async (courseId: string) => {
+    setDeletingId(courseId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingId) return;
+    const fd = new FormData();
+    fd.append("id", deletingId);
+    const res = await fetch("/api/admin?action=delete-course", {
+      method: "POST",
+      body: fd,
+    });
+    setDeletingId(null);
+    if (!res.ok) {
+      const data = await res.json();
+      toast.error(data.error || "Failed to delete course");
+      return;
+    }
+    toast.success("Course deleted");
+    await loadData();
+  };
+
   if (loading) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -140,33 +203,105 @@ export function CoursesManager() {
             const availableProgrammes = programmes.filter(
               (p) => !linkedProgrammeIds.has(p.id)
             );
+            const isEditing = editingId === course.id;
 
             return (
               <div key={course.id} className="px-5 py-4 transition-colors hover:bg-gray-50/50">
                 <div className="flex flex-wrap items-start gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
-                      <span className="font-semibold text-gray-900">{course.code}</span>
-                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
-                        Lvl {course.level}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-gray-500">{course.title}</p>
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
+                          <input
+                            value={editForm.code}
+                            onChange={(e) => setEditForm((f) => ({ ...f, code: e.target.value }))}
+                            className="w-28 rounded border border-gray-300 px-2 py-1 text-sm font-semibold"
+                            placeholder="Code"
+                          />
+                          <select
+                            value={editForm.level}
+                            onChange={(e) => setEditForm((f) => ({ ...f, level: Number(e.target.value) }))}
+                            className="rounded border border-gray-300 px-2 py-1 text-xs"
+                          >
+                            {[100, 200, 300, 400, 500, 600, 700].map((lvl) => (
+                              <option key={lvl} value={lvl}>Lvl {lvl}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <input
+                          value={editForm.title}
+                          onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                          placeholder="Course title"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="rounded bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            {saving ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            className="rounded border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
+                          <span className="font-semibold text-gray-900">{course.code}</span>
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
+                            Lvl {course.level}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-sm text-gray-500">{course.title}</p>
+                      </>
+                    )}
                   </div>
 
-                  <select
-                    value={course.scope}
-                    onChange={(e) => handleScopeChange(course.id, e.target.value)}
-                    className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                  >
-                    <option value="departmental">Departmental</option>
-                    <option value="shared">Shared</option>
-                    <option value="general">General</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={course.scope}
+                      onChange={(e) => handleScopeChange(course.id, e.target.value)}
+                      className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                    >
+                      <option value="departmental">Departmental</option>
+                      <option value="shared">Shared</option>
+                      <option value="general">General</option>
+                    </select>
+
+                    {!isEditing && (
+                      <>
+                        <button
+                          onClick={() => startEditing(course)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          title="Edit course"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(course.id)}
+                          className="rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600"
+                          title="Delete course"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {course.scope === "shared" && (
+                {course.scope === "shared" && !isEditing && (
                   <div className="mt-3 space-y-2">
                     <div className="flex flex-wrap gap-2">
                       {course.programme_courses?.map((pc: ProgrammeCourse) => (
@@ -214,6 +349,32 @@ export function CoursesManager() {
           })
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Delete course?</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              This will permanently delete this course and all associated data. This action cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
