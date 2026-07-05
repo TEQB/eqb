@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toaster";
 
@@ -84,17 +83,18 @@ export function NotificationBell({ light, onCountChange }: Props) {
     }
   }, [open]);
 
-  const handleMarkRead = async (id: string) => {
+  const handleToggleRead = async (id: string, isCurrentlyRead: boolean) => {
+    const action = isCurrentlyRead ? "mark-unread" : "mark-read";
     try {
       await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "mark-read", id }),
+        body: JSON.stringify({ action, id }),
       });
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+        prev.map((n) => (n.id === id ? { ...n, is_read: !isCurrentlyRead } : n)),
       );
-      setUnreadCount((c) => Math.max(0, c - 1));
+      setUnreadCount((c) => Math.max(0, c + (isCurrentlyRead ? 1 : -1)));
     } catch {
       // silently fail
     }
@@ -132,11 +132,11 @@ export function NotificationBell({ light, onCountChange }: Props) {
 
       if (data.resolved) {
         toast.success(data.message || "Request resolved");
-        handleMarkRead(notification.id);
+        handleToggleRead(notification.id, false);
         fetchNotifications();
       } else {
         toast.success("Your vote has been recorded");
-        handleMarkRead(notification.id);
+        handleToggleRead(notification.id, false);
       }
     } catch {
       toast.error("Failed to record vote");
@@ -208,33 +208,30 @@ export function NotificationBell({ light, onCountChange }: Props) {
                 <div
                   key={n.id}
                   className={cn(
-                    "border-b border-gray-50 px-4 py-3 transition-colors last:border-0",
+                    "border-b border-gray-50 px-4 py-3 transition-colors last:border-0 cursor-pointer",
                     !n.is_read && "bg-primary-50/40",
                   )}
+                  onClick={() => handleToggleRead(n.id, n.is_read)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleToggleRead(n.id, n.is_read);
+                    }
+                  }}
                 >
-                  {n.link && n.type !== "shared_course_vote_request" ? (
-                    <Link href={n.link} className="block" onClick={() => setOpen(false)}>
-                      <NotificationItem notification={n} formatTime={formatTime} />
-                    </Link>
-                  ) : (
-                    <NotificationItem notification={n} formatTime={formatTime} />
-                  )}
+                  <NotificationItem notification={n} formatTime={formatTime} />
                   {n.type === "shared_course_vote_request" && !n.is_read && (
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleVote(n, "approve");
-                        }}
+                        onClick={() => handleVote(n, "approve")}
                         className="flex-1 rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 transition-colors"
                       >
                         Approve
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleVote(n, "reject");
-                        }}
+                        onClick={() => handleVote(n, "reject")}
                         className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         Reject

@@ -82,6 +82,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    if (action === "mark-unread") {
+      if (!id) {
+        return NextResponse.json({ error: "Notification id required" }, { status: 400 });
+      }
+      const { error } = await (service as any)
+        .from("notifications")
+        .update({ is_read: false })
+        .eq("id", id)
+        .eq("user_id", profileId);
+      if (error) {
+        return NextResponse.json({ error: "Failed to mark as unread" }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
     if (action === "mark-all-read") {
       const { error } = await (service as any)
         .from("notifications")
