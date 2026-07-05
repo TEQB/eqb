@@ -24,6 +24,7 @@ export function CoursesManager() {
   const [editForm, setEditForm] = useState({ code: "", title: "", level: 0 });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [ownerPicker, setOwnerPicker] = useState<{ courseId: string; scope: string } | null>(null);
 
   const loadData = async () => {
     const [cRes, pRes] = await Promise.all([
@@ -47,19 +48,32 @@ export function CoursesManager() {
     [courses, search],
   );
 
-  const handleScopeChange = async (courseId: string, scope: string) => {
+  const handleScopeChange = async (courseId: string, scope: string, programmeId?: string) => {
     const res = await fetch("/api/admin?action=update-course-scope", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ course_id: courseId, scope }),
+      body: JSON.stringify({
+        course_id: courseId,
+        scope,
+        ...(programmeId !== undefined ? { programme_id: programmeId } : {}),
+      }),
     });
     if (!res.ok) {
       const data = await res.json();
       toast.error(data.error || "Failed to update scope");
-      return;
+      return false;
     }
     toast.success("Scope updated");
     await loadData();
+    return true;
+  };
+
+  const onScopeSelect = (courseId: string, newScope: string) => {
+    if (newScope === "general") {
+      handleScopeChange(courseId, newScope, null as unknown as string);
+    } else {
+      setOwnerPicker({ courseId, scope: newScope });
+    }
   };
 
   const handleRemoveProgramme = async (courseId: string, programmeId: string) => {
@@ -268,7 +282,7 @@ export function CoursesManager() {
                   <div className="flex items-center gap-2">
                     <select
                       value={course.scope}
-                      onChange={(e) => handleScopeChange(course.id, e.target.value)}
+                      onChange={(e) => onScopeSelect(course.id, e.target.value)}
                       className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                     >
                       <option value="departmental">Departmental</option>
@@ -300,6 +314,35 @@ export function CoursesManager() {
                     )}
                   </div>
                 </div>
+
+                {ownerPicker && ownerPicker.courseId === course.id && (
+                  <div className="mt-3 animate-fade-in-up">
+                    <label className="text-xs font-medium text-gray-600">Programme ownership</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleScopeChange(course.id, ownerPicker.scope, e.target.value);
+                            setOwnerPicker(null);
+                          }
+                        }}
+                        className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                      >
+                        <option value="" disabled>Select programme...</option>
+                        {programmes.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setOwnerPicker(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {course.scope === "shared" && !isEditing && (
                   <div className="mt-3 space-y-2">

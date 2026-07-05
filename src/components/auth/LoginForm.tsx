@@ -24,6 +24,7 @@ export function LoginForm() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
   const {
     register,
@@ -286,14 +287,24 @@ export function LoginForm() {
             <label htmlFor="confirmNewPassword" className="mb-2 block text-sm font-semibold text-gray-700">
               Confirm password
             </label>
-            <Input
-              id="confirmNewPassword"
-              type="password"
-              value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
-              className="h-12 rounded-xl focus-visible:ring-[#7A1030]"
-              placeholder="Repeat your password"
-            />
+            <div className="relative">
+              <Input
+                id="confirmNewPassword"
+                type={showConfirmNewPassword ? "text" : "password"}
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                className="h-12 rounded-xl pr-12 focus-visible:ring-[#7A1030]"
+                placeholder="Repeat your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmNewPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 transition-colors hover:text-secondary"
+                aria-label={showConfirmNewPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           {error && (
             <p className="text-sm text-danger-600 animate-fade-in">{error}</p>

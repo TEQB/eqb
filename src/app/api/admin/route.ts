@@ -144,8 +144,8 @@ export async function GET(req: NextRequest) {
         let query = service
           .from("past_questions")
           .select(`
-            id, course_id, year, semester, exam_type, file_url, file_type, status, flag_count, created_at,
-            courses!inner(code, title, level, programme_id),
+            id, course_id, year, semester, exam_type, level, file_url, file_type, status, flag_count, created_at,
+            courses!inner(code, title, level, programme_id, programme:programme_id(id, name)),
             profiles!inner(full_name, auth_user_id)
           `, { count: "exact" });
 
@@ -1220,12 +1220,24 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
       case "update-course-scope": {
         const scopeCourseId = jsonBody?.course_id as string;
         const newScope = jsonBody?.scope as string;
+        const newProgrammeId = jsonBody?.programme_id as string | null | undefined;
+
         if (!scopeCourseId || !validateUUID(scopeCourseId) || !newScope || !["departmental", "shared", "general"].includes(newScope)) {
           return NextResponse.json({ error: "course_id and valid scope required" }, { status: 400 });
         }
-        const { error: scopeErr } = await service.from("courses").update({ scope: newScope } as never).eq("id", scopeCourseId);
+
+        if ((newScope === "departmental" || newScope === "shared") && (!newProgrammeId || !validateUUID(newProgrammeId))) {
+          return NextResponse.json({ error: "A valid programme_id is required for departmental or shared scope" }, { status: 400 });
+        }
+
+        const updatePayload: { scope: string; programme_id: string | null } = {
+          scope: newScope,
+          programme_id: newScope === "general" ? null : (newProgrammeId as string),
+        };
+
+        const { error: scopeErr } = await service.from("courses").update(updatePayload as never).eq("id", scopeCourseId);
         if (scopeErr) throw scopeErr;
-        logger.info({ event: "admin.update_course_scope", message: "Course scope updated", userId: user.id, metadata: { course_id: scopeCourseId, scope: newScope } });
+        logger.info({ event: "admin.update_course_scope", message: "Course scope updated", userId: user.id, metadata: { course_id: scopeCourseId, scope: newScope, programme_id: updatePayload.programme_id } });
         return NextResponse.json({ success: true });
       }
 

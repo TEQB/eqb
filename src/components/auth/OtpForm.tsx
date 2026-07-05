@@ -46,6 +46,19 @@ export function OtpForm() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const newOtp = ["", "", "", "", "", ""];
+    for (let i = 0; i < pasted.length; i++) {
+      newOtp[i] = pasted[i];
+    }
+    setOtp(newOtp);
+    const nextEmptyIndex = pasted.length < 6 ? pasted.length : 5;
+    inputRefs.current[nextEmptyIndex]?.focus();
+  };
+
   const handleVerify = useCallback(async () => {
     const token = otp.join("");
     if (token.length !== 6) return;
@@ -123,6 +136,7 @@ export function OtpForm() {
             value={digit}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
+            onPaste={handlePaste}
             className="h-12 w-12 rounded-2xl border border-white/70 text-center text-lg font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition-all duration-normal focus:border-secondary focus:shadow-[0_0_0_4px_rgba(212,117,10,0.16)] focus:outline-none"
             style={digit ? { borderColor: "var(--secondary)", boxShadow: "0 0 0 4px rgba(212,117,10,0.16)" } : undefined}
           />

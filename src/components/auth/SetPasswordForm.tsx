@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
@@ -23,6 +24,8 @@ export function SetPasswordForm() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const strength = getPasswordStrength(password);
 
@@ -75,14 +78,24 @@ export function SetPasswordForm() {
         <label htmlFor="password" className="block text-sm font-medium text-gray-700">
           Password
         </label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5"
-          autoComplete="new-password"
-        />
+        <div className="relative mt-1">
+          <input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 pr-12"
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 transition-colors hover:text-secondary"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
         {password.length > 0 && (
           <div className="mt-2 space-y-1">
             <div className="flex h-1.5 overflow-hidden rounded-full bg-gray-200">
@@ -105,14 +118,24 @@ export function SetPasswordForm() {
         <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
           Confirm password
         </label>
-        <input
-          id="confirmPassword"
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5"
-          autoComplete="new-password"
-        />
+        <div className="relative mt-1">
+          <input
+            id="confirmPassword"
+            type={showConfirm ? "text" : "password"}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 pr-12"
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirm((prev) => !prev)}
+            className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 transition-colors hover:text-secondary"
+            aria-label={showConfirm ? "Hide password" : "Show password"}
+          >
+            {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       {error && (
