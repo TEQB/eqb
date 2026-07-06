@@ -9,6 +9,7 @@ import { registerSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MatricInput } from "@/components/auth/MatricInput";
 import { toast } from "@/components/ui/toaster";
 
 type FormData = z.infer<typeof registerSchema>;
@@ -161,10 +162,16 @@ export function RegisterForm() {
       </div>
 
       <div className="w-full animate-fade-in-up stagger-3">
-        <label htmlFor="matricNumber" className="mb-2 block text-sm font-semibold text-gray-700">
+        <label className="mb-2 block text-sm font-semibold text-gray-700">
           Matric number
         </label>
-        <Input id="matricNumber" placeholder="Matric number" className="h-12 rounded-xl focus-visible:ring-[#7A1030]" {...register("matricNumber")} />
+        <Controller
+          control={control}
+          name="matricNumber"
+          render={({ field }) => (
+            <MatricInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
+          )}
+        />
         {errors.matricNumber && (
           <p className="mt-1 text-xs text-danger-600 animate-fade-in">{errors.matricNumber.message}</p>
         )}

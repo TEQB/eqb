@@ -37,6 +37,19 @@ export async function POST(req: Request) {
     }
 
     const service = createServiceClient();
+
+    // Check if email is already registered
+    const { data: usersData, error: usersError } = await service.auth.admin.listUsers();
+    if (!usersError && usersData?.users) {
+      const duplicateEmail = usersData.users.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase(),
+      );
+      if (duplicateEmail) {
+        logger.warn({ event: "otp.send.duplicate_email", message: "Email already registered", ip, email });
+        return NextResponse.json({ error: "This email is already registered." }, { status: 409 });
+      }
+    }
+
     if (matricNumber) {
       const { data: existingProfile } = await service
         .from("profiles")

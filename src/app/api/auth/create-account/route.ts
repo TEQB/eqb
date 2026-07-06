@@ -65,6 +65,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: passwordCheck.error }, { status: 400 });
     }
 
+    // Check for duplicate email in auth.users
+    const { data: createUsersData, error: createUsersError } = await supabase.auth.admin.listUsers();
+    if (!createUsersError && createUsersData?.users) {
+      const dupEmail = createUsersData.users.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase(),
+      );
+      if (dupEmail) {
+        logger.warn({ event: "account.create.duplicate_email", message: "Email already registered", ip, email });
+        return NextResponse.json({ error: "This email is already registered." }, { status: 409 });
+      }
+    }
+
     const { data: existingProfile } = await supabase
       .from("profiles")
       .select("id")

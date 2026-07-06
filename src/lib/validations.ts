@@ -17,7 +17,7 @@ export const verifyOtpSchema = z.object({
 export const registerSchema = z.object({
   fullName: z.string().min(2).max(100),
   email: z.string().email(),
-  matricNumber: z.string().min(6).max(20),
+  matricNumber: z.string().regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ (e.g. 125/23/1/0056)"),
   facultyId: z.string().uuid(),
   programmeId: z.string().uuid(),
   currentLevel: z.preprocess(
@@ -92,7 +92,7 @@ export const completePasswordResetSchema = z
 export const sendOtpSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2).max(100).optional(),
-  matricNumber: z.string().min(6).max(20).optional(),
+  matricNumber: z.string().regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ").optional(),
   programmeId: z.string().uuid().optional(),
   currentLevel: z.preprocess(
     (v) => (v ? Number(v) : v),
