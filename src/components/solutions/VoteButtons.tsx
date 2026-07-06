@@ -63,6 +63,16 @@ export function VoteButtons({
       if (insertError.code === "23505") {
         setError("Already voted");
       }
+    } else {
+      fetch("/api/admin?action=notify-solution-voted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          solutionId,
+          voterId: profile.id,
+          vote,
+        }),
+      });
     }
   };
 

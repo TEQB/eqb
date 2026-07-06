@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { toast } from "@/components/ui/toaster";
+import { AdminStatCards } from "@/components/admin/AdminStatCards";
 
 type Programme = { id: string; name: string };
 type ProgrammeCourse = { programme_id: string; programmes: { id: string; name: string } };
@@ -31,6 +32,12 @@ export function CoursesManager() {
     ownerId: string | null;
     selected: string[];
   } | null>(null);
+  const [courseStats, setCourseStats] = useState<{
+    total: number;
+    departmental: number;
+    shared: number;
+    general: number;
+  } | null>(null);
 
   const loadData = async () => {
     const [cRes, pRes] = await Promise.all([
@@ -44,6 +51,9 @@ export function CoursesManager() {
 
   useEffect(() => {
     loadData().finally(() => setLoading(false));
+    fetch("/api/admin?action=course-stats")
+      .then((r) => r.json())
+      .then((d) => { if (d) setCourseStats(d); });
   }, []);
 
   const filtered = useMemo(
@@ -188,7 +198,16 @@ export function CoursesManager() {
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="space-y-6">
+      {courseStats && (
+        <AdminStatCards cards={[
+          { label: "Total Courses", value: courseStats.total },
+          { label: "Departmental", value: courseStats.departmental },
+          { label: "Shared", value: courseStats.shared, color: "warning" },
+          { label: "General", value: courseStats.general },
+        ]} />
+      )}
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-5 py-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-500">
@@ -533,6 +552,7 @@ export function CoursesManager() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

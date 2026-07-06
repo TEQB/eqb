@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "@/components/ui/toaster";
+import { AdminStatCards } from "@/components/admin/AdminStatCards";
 
 interface LogEntry {
   id: string;
@@ -33,6 +34,7 @@ export default function AdminLogsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [limit] = useState(30);
+  const [logStats, setLogStats] = useState<{ todayEvents: number } | null>(null);
 
   const [levelFilter, setLevelFilter] = useState("");
   const [eventFilter, setEventFilter] = useState("");
@@ -72,6 +74,9 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     fetchLogs(1);
+    fetch("/api/admin?action=log-today-stats")
+      .then((r) => r.json())
+      .then((d) => { if (d) setLogStats(d); });
   }, [fetchLogs]);
 
   const clearFilters = () => {
@@ -154,6 +159,12 @@ export default function AdminLogsPage() {
           Export CSV
         </button>
       </div>
+
+      {logStats && (
+        <AdminStatCards cards={[
+          { label: "Events Today", value: logStats.todayEvents, color: "default" },
+        ]} />
+      )}
 
       {/* Filter Bar */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">

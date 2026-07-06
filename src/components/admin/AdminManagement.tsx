@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/toaster";
+import { AdminStatCards } from "@/components/admin/AdminStatCards";
 
 type AdminProfile = {
   id: string;
@@ -17,6 +18,7 @@ export function AdminManagement() {
   const [fullName, setFullName] = useState("");
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [stats, setStats] = useState<{ totalAdmins: number } | null>(null);
 
   async function loadAdmins() {
     const res = await fetch("/api/admin?action=list-admins");
@@ -27,6 +29,9 @@ export function AdminManagement() {
 
   useEffect(() => {
     loadAdmins();
+    fetch("/api/admin?action=admin-stats")
+      .then((r) => r.json())
+      .then((d) => { if (d) setStats(d); });
   }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -60,6 +65,11 @@ export function AdminManagement() {
 
   return (
     <div className="space-y-6">
+      {stats && (
+        <AdminStatCards cards={[
+          { label: "Total Admins", value: stats.totalAdmins },
+        ]} />
+      )}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h3 className="mb-5 text-sm font-semibold text-gray-900">Invite New Admin</h3>
         <form onSubmit={handleInvite} className="space-y-4">

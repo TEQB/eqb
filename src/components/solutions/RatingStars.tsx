@@ -107,6 +107,15 @@ export function RatingStars({
         : `Updated rating to ${rating} star${rating > 1 ? "s" : ""}`,
     );
     onRated?.();
+    fetch("/api/admin?action=notify-solution-rated", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        solutionId,
+        raterId: profile.id,
+        rating,
+      }),
+    });
   };
 
   if (isOwn) {

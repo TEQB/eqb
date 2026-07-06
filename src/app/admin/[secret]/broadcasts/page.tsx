@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "@/components/ui/toaster";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AdminStatCards } from "@/components/admin/AdminStatCards";
 
 type Broadcast = {
   id: string;
@@ -61,6 +62,7 @@ export default function AdminBroadcastsPage() {
   const [showPreview, setShowPreview] = useState(false);
 
   const [errorBroadcast, setErrorBroadcast] = useState<Broadcast | null>(null);
+  const [broadcastStats, setBroadcastStats] = useState<{ total: number } | null>(null);
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
@@ -90,6 +92,9 @@ export default function AdminBroadcastsPage() {
   useEffect(() => {
     fetchBroadcasts();
     fetchFaculties();
+    fetch("/api/admin?action=broadcast-stats")
+      .then((r) => r.json())
+      .then((d) => { if (d) setBroadcastStats(d); });
   }, [fetchBroadcasts, fetchFaculties]);
 
   useEffect(() => {
@@ -301,6 +306,11 @@ export default function AdminBroadcastsPage() {
         </Link>
       </div>
 
+      {broadcastStats && (
+        <AdminStatCards cards={[
+          { label: "Total Broadcasts", value: broadcastStats.total },
+        ]} />
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">Compose Broadcast</h3>
         <p className="mt-1 text-sm text-gray-500">

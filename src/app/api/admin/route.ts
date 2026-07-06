@@ -447,6 +447,150 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      case "list-solutions": {
+        const solStatus = req.nextUrl.searchParams.get("status");
+        const solSearch = req.nextUrl.searchParams.get("search");
+        const solProgramme = req.nextUrl.searchParams.get("programme_id");
+        const solPage = parseInt(req.nextUrl.searchParams.get("page") || "1");
+        const solPageSize = 20;
+        const solOffset = (solPage - 1) * solPageSize;
+
+        let solQuery = service
+          .from("solutions")
+          .select(`
+            id, body, file_url, upvotes, downvotes, rating_sum, rating_count, status, created_at,
+            submitted_by,
+            profiles!inner(full_name, auth_user_id),
+            question_id,
+            past_questions!inner(
+              id, course_id, year, semester, exam_type,
+              courses!inner(code, title, level)
+            )
+          `, { count: "exact" });
+
+        if (solStatus && solStatus !== "all") {
+          solQuery = solQuery.eq("status", solStatus);
+        }
+        if (solSearch) {
+          solQuery = solQuery.ilike("past_questions.courses.code", `%${solSearch.replace(/[%_]/g, "").slice(0, 100)}%`);
+        }
+
+        const { data: rawSols, count: solCount, error: solErr } = await solQuery
+          .order("created_at", { ascending: false })
+          .range(solOffset, solOffset + solPageSize - 1) as never;
+
+        if (solErr) {
+          logger.error({ event: "admin.list_solutions_error", message: "Failed to list solutions", error: solErr.message });
+          return NextResponse.json({ error: "Failed to load solutions" }, { status: 500 });
+        }
+
+        const solAuthIds = Array.from(
+          new Set(
+            ((rawSols ?? []) as Array<{ profiles?: { auth_user_id: string } }>)
+              .map((s) => s.profiles?.auth_user_id)
+              .filter(Boolean),
+          ),
+        ) as string[];
+        const solEmailMap = new Map<string, string>();
+        if (solAuthIds.length > 0) {
+          const result = await service.auth.admin.listUsers({ perPage: 1000 });
+          if (result.data?.users) {
+            for (const u of result.data.users) {
+              if (u.id && u.email) solEmailMap.set(u.id, u.email);
+            }
+          }
+        }
+
+        const solutions = (rawSols ?? []).map((s: Record<string, unknown>) => {
+          const profile = s.profiles as Record<string, unknown> | undefined;
+          const authUid = profile?.auth_user_id as string | undefined;
+          const pg = s.past_questions as Record<string, unknown> | undefined;
+          const course = pg?.courses as Record<string, unknown> | undefined;
+          return {
+            id: s.id,
+            body: s.body,
+            file_url: s.file_url,
+            upvotes: s.upvotes,
+            downvotes: s.downvotes,
+            rating_sum: s.rating_sum,
+            rating_count: s.rating_count,
+            status: s.status,
+            created_at: s.created_at,
+            submitted_by: s.submitted_by,
+            author_name: profile?.full_name || "Unknown",
+            author_email: authUid ? solEmailMap.get(authUid) || null : null,
+            question_id: s.question_id,
+            course_code: course?.code || "-",
+            course_title: course?.title || "-",
+            course_level: course?.level || null,
+            year: pg?.year || null,
+            semester: pg?.semester || null,
+            exam_type: pg?.exam_type || null,
+          };
+        });
+
+        return NextResponse.json({
+          solutions,
+          total: solCount ?? 0,
+          page: solPage,
+          pageSize: solPageSize,
+          totalPages: Math.ceil((solCount ?? 0) / solPageSize),
+        });
+      }
+
+      case "solution-stats": {
+        const [{ count: solTotal }, { count: solPublished }, { count: solPending }, { count: solRejected }] = await Promise.all([
+          service.from("solutions").select("*", { count: "exact", head: true }),
+          service.from("solutions").select("*", { count: "exact", head: true }).eq("status", "published"),
+          service.from("solutions").select("*", { count: "exact", head: true }).eq("status", "pending_review"),
+          service.from("solutions").select("*", { count: "exact", head: true }).eq("status", "rejected"),
+        ]);
+        return NextResponse.json({
+          total: solTotal ?? 0,
+          published: solPublished ?? 0,
+          pending_review: solPending ?? 0,
+          rejected: solRejected ?? 0,
+        });
+      }
+
+      case "admin-stats": {
+        const [{ count: totalAdmins }] = await Promise.all([
+          service.from("profiles").select("*", { count: "exact", head: true }).eq("role", "super_admin"),
+        ]);
+        return NextResponse.json({ totalAdmins: totalAdmins ?? 0 });
+      }
+
+      case "course-stats": {
+        const [{ count: totalCourses }, { count: deptCourses }, { count: sharedCourses }, { count: generalCourses }] = await Promise.all([
+          service.from("courses").select("*", { count: "exact", head: true }),
+          service.from("courses").select("*", { count: "exact", head: true }).eq("scope", "departmental"),
+          service.from("courses").select("*", { count: "exact", head: true }).eq("scope", "shared"),
+          service.from("courses").select("*", { count: "exact", head: true }).eq("scope", "general"),
+        ]);
+        return NextResponse.json({
+          total: totalCourses ?? 0,
+          departmental: deptCourses ?? 0,
+          shared: sharedCourses ?? 0,
+          general: generalCourses ?? 0,
+        });
+      }
+
+      case "broadcast-stats": {
+        const [{ count: totalBroadcasts }] = await Promise.all([
+          service.from("broadcasts").select("*", { count: "exact", head: true }),
+        ]);
+        return NextResponse.json({ total: totalBroadcasts ?? 0 });
+      }
+
+      case "log-today-stats": {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const [{ count: todayEvents }] = await Promise.all([
+          service.from("activity_logs").select("*", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()).lte("created_at", new Date().toISOString()),
+        ]);
+        return NextResponse.json({ todayEvents: todayEvents ?? 0 });
+      }
+
       case "list-logs": {
         const isExport = req.nextUrl.searchParams.get("export") === "true";
         const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
@@ -1459,6 +1603,177 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const { error } = await service.from("solutions").delete().eq("id", solution_id);
         if (error) throw error;
         logger.info({ event: "admin.delete_solution", message: "Solution deleted", userId: user.id, metadata: { solution_id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "notify-solution-published": {
+        const notifyQuestionId = jsonBody?.questionId as string;
+        if (!notifyQuestionId || !validateUUID(notifyQuestionId)) {
+          return NextResponse.json({ error: "Valid questionId required" }, { status: 400 });
+        }
+        const { data: pq } = await service
+          .from("past_questions")
+          .select("id, course_id, year, semester, exam_type")
+          .eq("id", notifyQuestionId)
+          .single();
+        const pastQ = pq as unknown as { id: string; course_id: string; year: number; semester: string; exam_type: string } | null;
+        if (!pastQ) {
+          return NextResponse.json({ error: "Question not found" }, { status: 404 });
+        }
+        const { data: courseRow } = await service
+          .from("courses")
+          .select("code, title")
+          .eq("id", pastQ.course_id)
+          .single();
+        const course = courseRow as unknown as { code: string; title: string } | null;
+        const code = course?.code || "Unknown";
+        const title = course?.title || "";
+        const session = `${pastQ.year}/${Number(pastQ.year) + 1}`;
+
+        notifyCourseStudents(pastQ.course_id, {
+          type: "solution_published",
+          title: `New solution available: ${code}`,
+          body: `A solution has been published for ${code} — ${session} ${pastQ.semester} semester.`,
+          link: `/questions/${notifyQuestionId}`,
+        });
+        notifyAdmins({
+          type: "solution_published",
+          title: `New solution: ${code}`,
+          body: `A solution was uploaded for ${code} — ${title} (${session} ${pastQ.semester} semester).`,
+        });
+
+        logger.info({ event: "admin.notify_solution_published", message: "Solution published notification sent", userId: user.id, metadata: { question_id: notifyQuestionId, course_id: pastQ.course_id } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "notify-solution-rated": {
+        const ratedSolId = jsonBody?.solutionId as string;
+        const raterProfileId = jsonBody?.raterId as string;
+        const ratingValue = jsonBody?.rating as number | undefined;
+        if (!ratedSolId || !validateUUID(ratedSolId) || !raterProfileId || !validateUUID(raterProfileId)) {
+          return NextResponse.json({ error: "Valid solutionId and raterId required" }, { status: 400 });
+        }
+        const { data: rawSol } = await service
+          .from("solutions")
+          .select("submitted_by, question_id")
+          .eq("id", ratedSolId)
+          .single();
+        const sol = rawSol as unknown as { submitted_by: string; question_id: string } | null;
+        if (!sol) {
+          return NextResponse.json({ error: "Solution not found" }, { status: 404 });
+        }
+        const { data: rawRater } = await service
+          .from("profiles")
+          .select("full_name")
+          .eq("id", raterProfileId)
+          .single();
+        const rater = rawRater as unknown as { full_name: string } | null;
+        const raterName = rater?.full_name || "Someone";
+        const { data: rawSolAuthor } = await service
+          .from("profiles")
+          .select("full_name")
+          .eq("id", sol.submitted_by)
+          .single();
+        const solAuthor = rawSolAuthor as unknown as { full_name: string } | null;
+        const authorName = solAuthor?.full_name || "Unknown";
+        const { data: pq } = await service
+          .from("past_questions")
+          .select("course_id, year, semester")
+          .eq("id", sol.question_id)
+          .single();
+        const pastQ = pq as unknown as { course_id: string; year: number; semester: string } | null;
+        let courseCode = "a course";
+        if (pastQ) {
+          const { data: courseRow } = await service
+            .from("courses")
+            .select("code")
+            .eq("id", pastQ.course_id)
+            .single();
+          const course = courseRow as unknown as { code: string } | null;
+          if (course) courseCode = course.code;
+        }
+        const solLink = `/question/${sol.question_id}`;
+        if (ratingValue) {
+          createNotification({
+            user_id: sol.submitted_by,
+            type: "solution_rated",
+            title: `Your solution was rated ${ratingValue} stars`,
+            body: `${raterName} rated your solution for ${courseCode} with ${ratingValue} stars.`,
+            link: solLink,
+          });
+          notifyAdmins({
+            type: "solution_rated",
+            title: `Solution rated by ${raterName}`,
+            body: `${raterName} rated a solution by ${authorName} for ${courseCode} with ${ratingValue} stars.`,
+          });
+        }
+        logger.info({ event: "admin.notify_solution_rated", message: "Solution rated notification sent", userId: user.id, metadata: { solution_id: ratedSolId, rater_id: raterProfileId, rating: ratingValue } });
+        return NextResponse.json({ success: true });
+      }
+
+      case "notify-solution-voted": {
+        const votedSolId = jsonBody?.solutionId as string;
+        const voterProfileId = jsonBody?.voterId as string;
+        const voteDir = jsonBody?.vote as string | undefined;
+        if (!votedSolId || !validateUUID(votedSolId) || !voterProfileId || !validateUUID(voterProfileId)) {
+          return NextResponse.json({ error: "Valid solutionId and voterId required" }, { status: 400 });
+        }
+        if (voteDir !== "up") {
+          return NextResponse.json({ success: true });
+        }
+        const { data: rawSol } = await service
+          .from("solutions")
+          .select("submitted_by, question_id")
+          .eq("id", votedSolId)
+          .single();
+        const sol = rawSol as unknown as { submitted_by: string; question_id: string } | null;
+        if (!sol) {
+          return NextResponse.json({ error: "Solution not found" }, { status: 404 });
+        }
+        const { data: rawVoter } = await service
+          .from("profiles")
+          .select("full_name")
+          .eq("id", voterProfileId)
+          .single();
+        const voter = rawVoter as unknown as { full_name: string } | null;
+        const voterName = voter?.full_name || "Someone";
+        const { data: rawSolAuthor } = await service
+          .from("profiles")
+          .select("full_name")
+          .eq("id", sol.submitted_by)
+          .single();
+        const solAuthor = rawSolAuthor as unknown as { full_name: string } | null;
+        const authorName = solAuthor?.full_name || "Unknown";
+        const { data: pq } = await service
+          .from("past_questions")
+          .select("course_id, year, semester")
+          .eq("id", sol.question_id)
+          .single();
+        const pastQ = pq as unknown as { course_id: string; year: number; semester: string } | null;
+        let courseCode = "a course";
+        if (pastQ) {
+          const { data: courseRow } = await service
+            .from("courses")
+            .select("code")
+            .eq("id", pastQ.course_id)
+            .single();
+          const course = courseRow as unknown as { code: string } | null;
+          if (course) courseCode = course.code;
+        }
+        const solLink = `/question/${sol.question_id}`;
+        createNotification({
+          user_id: sol.submitted_by,
+          type: "solution_voted",
+          title: `Your solution received an upvote`,
+          body: `${voterName} upvoted your solution for ${courseCode}.`,
+          link: solLink,
+        });
+        notifyAdmins({
+          type: "solution_voted",
+          title: `Solution upvoted by ${voterName}`,
+          body: `${voterName} upvoted a solution by ${authorName} for ${courseCode}.`,
+        });
+        logger.info({ event: "admin.notify_solution_voted", message: "Solution voted notification sent", userId: user.id, metadata: { solution_id: votedSolId, voter_id: voterProfileId, vote: voteDir } });
         return NextResponse.json({ success: true });
       }
 

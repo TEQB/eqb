@@ -99,6 +99,14 @@ export function SolutionForm({ questionId }: SolutionFormProps) {
     resetForm();
     setOpen(false);
     toast.success("Solution posted — thanks for contributing!");
+
+    // Notify admins and course students (non-blocking)
+    fetch("/api/admin?action=notify-solution-published", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questionId }),
+    }).catch(() => {});
+
     router.refresh();
     setIsSubmitting(false);
   };
