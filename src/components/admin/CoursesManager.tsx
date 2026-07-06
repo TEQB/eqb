@@ -25,7 +25,12 @@ export function CoursesManager() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [ownerPicker, setOwnerPicker] = useState<{ courseId: string; scope: string } | null>(null);
-  const [sharedPicker, setSharedPicker] = useState<{ courseId: string; selected: string[] } | null>(null);
+  const [sharedPicker, setSharedPicker] = useState<{
+    courseId: string;
+    step: "owner" | "programmes";
+    ownerId: string | null;
+    selected: string[];
+  } | null>(null);
 
   const loadData = async () => {
     const [cRes, pRes] = await Promise.all([
@@ -75,7 +80,7 @@ export function CoursesManager() {
     if (newScope === "general") {
       handleScopeChange(courseId, newScope, null as unknown as string);
     } else if (newScope === "shared") {
-      setSharedPicker({ courseId, selected: [] });
+      setSharedPicker({ courseId, step: "owner", ownerId: null, selected: [] });
     } else {
       setOwnerPicker({ courseId, scope: newScope });
     }
@@ -349,44 +354,86 @@ export function CoursesManager() {
                   </div>
                 )}
 
-                {sharedPicker && sharedPicker.courseId === course.id && (
+                {sharedPicker && sharedPicker.courseId === course.id && sharedPicker.step === "owner" && (
                   <div className="mt-3 animate-fade-in-up rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
-                    <label className="text-xs font-medium text-gray-600">Select programmes to share with</label>
+                    <label className="text-xs font-medium text-gray-600">Owning programme</label>
                     <p className="mb-3 mt-0.5 text-[11px] text-gray-500">
-                      Choose one or more programmes that should have access to this course.
+                      Select the programme that owns this course. It will be the primary programme on record.
                     </p>
+                    <div className="flex items-center gap-2">
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setSharedPicker((prev) =>
+                              prev ? { ...prev, step: "programmes", ownerId: e.target.value } : prev
+                            );
+                          }
+                        }}
+                        className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-primary-500 focus:ring-2 focus:ring-primary-100 flex-1"
+                      >
+                        <option value="" disabled>Select owning programme...</option>
+                        {programmes.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setSharedPicker(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {sharedPicker && sharedPicker.courseId === course.id && sharedPicker.step === "programmes" && (
+                  <div className="mt-3 animate-fade-in-up rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">Additional shared programmes</label>
+                        <p className="mt-0.5 text-[11px] text-gray-500">
+                          Select other programmes that should have access to this course (optional).
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                        Owner: {programmes.find((p) => p.id === sharedPicker.ownerId)?.name || "—"}
+                      </span>
+                    </div>
                     <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
-                      {programmes.map((p) => {
-                        const isSelected = sharedPicker.selected.includes(p.id);
-                        return (
-                          <label
-                            key={p.id}
-                            className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                              isSelected ? "bg-indigo-50 text-indigo-800" : "hover:bg-gray-50 text-gray-700"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {
-                                setSharedPicker((prev) => {
-                                  if (!prev) return prev;
-                                  const next = isSelected
-                                    ? prev.selected.filter((id) => id !== p.id)
-                                    : [...prev.selected, p.id];
-                                  return { ...prev, selected: next };
-                                });
-                              }}
-                              className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            {p.name}
-                          </label>
-                        );
-                      })}
+                      {programmes
+                        .filter((p) => p.id !== sharedPicker.ownerId)
+                        .map((p) => {
+                          const isSelected = sharedPicker.selected.includes(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                                isSelected ? "bg-indigo-50 text-indigo-800" : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setSharedPicker((prev) => {
+                                    if (!prev) return prev;
+                                    const next = isSelected
+                                      ? prev.selected.filter((id) => id !== p.id)
+                                      : [...prev.selected, p.id];
+                                    return { ...prev, selected: next };
+                                  });
+                                }}
+                                className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              {p.name}
+                            </label>
+                          );
+                        })}
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-xs text-gray-500">
-                        {sharedPicker.selected.length} programme{sharedPicker.selected.length !== 1 ? "s" : ""} selected
+                        {sharedPicker.selected.length} additional programme{sharedPicker.selected.length !== 1 ? "s" : ""} selected
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -397,16 +444,13 @@ export function CoursesManager() {
                         </button>
                         <button
                           onClick={async () => {
-                            const selected = sharedPicker.selected;
-                            if (selected.length === 0) {
-                              toast.error("Select at least one programme");
-                              return;
-                            }
-                            await handleScopeChange(course.id, "shared", selected[0], selected);
+                            const ownerId = sharedPicker.ownerId;
+                            const additional = sharedPicker.selected;
+                            if (!ownerId) return;
+                            await handleScopeChange(course.id, "shared", ownerId, [ownerId, ...additional]);
                             setSharedPicker(null);
                           }}
-                          disabled={sharedPicker.selected.length === 0}
-                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                         >
                           Save
                         </button>
