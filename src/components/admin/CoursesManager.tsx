@@ -25,6 +25,7 @@ export function CoursesManager() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [ownerPicker, setOwnerPicker] = useState<{ courseId: string; scope: string } | null>(null);
+  const [sharedPicker, setSharedPicker] = useState<{ courseId: string; selected: string[] } | null>(null);
 
   const loadData = async () => {
     const [cRes, pRes] = await Promise.all([
@@ -48,15 +49,17 @@ export function CoursesManager() {
     [courses, search],
   );
 
-  const handleScopeChange = async (courseId: string, scope: string, programmeId?: string) => {
+  const handleScopeChange = async (courseId: string, scope: string, programmeId?: string, programmeIds?: string[]) => {
+    const body: Record<string, unknown> = {
+      course_id: courseId,
+      scope,
+    };
+    if (programmeId !== undefined) body.programme_id = programmeId;
+    if (programmeIds !== undefined && programmeIds.length > 0) body.programme_ids = programmeIds;
     const res = await fetch("/api/admin?action=update-course-scope", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        course_id: courseId,
-        scope,
-        ...(programmeId !== undefined ? { programme_id: programmeId } : {}),
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const data = await res.json();
@@ -71,6 +74,8 @@ export function CoursesManager() {
   const onScopeSelect = (courseId: string, newScope: string) => {
     if (newScope === "general") {
       handleScopeChange(courseId, newScope, null as unknown as string);
+    } else if (newScope === "shared") {
+      setSharedPicker({ courseId, selected: [] });
     } else {
       setOwnerPicker({ courseId, scope: newScope });
     }
@@ -340,6 +345,72 @@ export function CoursesManager() {
                       >
                         Cancel
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {sharedPicker && sharedPicker.courseId === course.id && (
+                  <div className="mt-3 animate-fade-in-up rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+                    <label className="text-xs font-medium text-gray-600">Select programmes to share with</label>
+                    <p className="mb-3 mt-0.5 text-[11px] text-gray-500">
+                      Choose one or more programmes that should have access to this course.
+                    </p>
+                    <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+                      {programmes.map((p) => {
+                        const isSelected = sharedPicker.selected.includes(p.id);
+                        return (
+                          <label
+                            key={p.id}
+                            className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                              isSelected ? "bg-indigo-50 text-indigo-800" : "hover:bg-gray-50 text-gray-700"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSharedPicker((prev) => {
+                                  if (!prev) return prev;
+                                  const next = isSelected
+                                    ? prev.selected.filter((id) => id !== p.id)
+                                    : [...prev.selected, p.id];
+                                  return { ...prev, selected: next };
+                                });
+                              }}
+                              className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            {p.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        {sharedPicker.selected.length} programme{sharedPicker.selected.length !== 1 ? "s" : ""} selected
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSharedPicker(null)}
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const selected = sharedPicker.selected;
+                            if (selected.length === 0) {
+                              toast.error("Select at least one programme");
+                              return;
+                            }
+                            await handleScopeChange(course.id, "shared", selected[0], selected);
+                            setSharedPicker(null);
+                          }}
+                          disabled={sharedPicker.selected.length === 0}
+                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -8,7 +8,7 @@ import { withAuthRetry, serializeAuthError, isTransientAuthError } from "@/lib/s
 import { validateUUID } from "@/lib/utils";
 import { sendEmail } from "@/lib/mailer";
 import { broadcastSchema } from "@/lib/validations";
-import { createNotification, notifyAdmins } from "@/lib/notifications";
+import { createNotification, notifyAdmins, notifyCourseStudents } from "@/lib/notifications";
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -334,6 +334,14 @@ export async function GET(req: NextRequest) {
           };
         });
         return NextResponse.json({ students });
+      }
+
+      case "pending-count": {
+        const { count } = await service
+          .from("past_questions")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending_review");
+        return NextResponse.json({ count: count ?? 0 });
       }
 
       case "faculties": {
@@ -750,6 +758,12 @@ export async function POST(req: NextRequest) {
             title: "Question restored by admin",
             body: `Question ${id.slice(0, 8)} was restored from suspension.`,
           });
+          notifyCourseStudents(restoreQ.course_id, {
+            type: "question_published",
+            title: "Question restored",
+            body: "A previously suspended question is now visible again.",
+            link: `/questions/${id}`,
+          });
         }
         return NextResponse.json({ success: true });
       }
@@ -1104,6 +1118,28 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           return NextResponse.json({ error: insertErr.message }, { status: 500 });
         }
         logger.info({ event: "admin.upload", message: "Admin uploaded question", userId: user.id, metadata: { course_id, file_url, question_id } });
+
+        // Notify course students and admins about the new published question
+        const { data: rawCourseData } = await service
+          .from("courses")
+          .select("code, title")
+          .eq("id", course_id)
+          .single();
+        const courseInfo = rawCourseData as unknown as { code: string; title: string } | null;
+        if (courseInfo) {
+          notifyCourseStudents(course_id, {
+            type: "question_published",
+            title: `New question available: ${courseInfo.code}`,
+            body: `${courseInfo.title} — ${semester} semester ${year}/${Number(year) + 1}`,
+            link: `/questions/${question_id}`,
+          });
+          notifyAdmins({
+            type: "question_published",
+            title: `Admin published ${courseInfo.code}`,
+            body: `${courseInfo.title} — ${semester} semester ${year}/${Number(year) + 1}`,
+          });
+        }
+
         return NextResponse.json({ success: true, questionId: question_id });
       }
 
@@ -1254,6 +1290,7 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         const scopeCourseId = jsonBody?.course_id as string;
         const newScope = jsonBody?.scope as string;
         const newProgrammeId = jsonBody?.programme_id as string | null | undefined;
+        const programmeIds = jsonBody?.programme_ids as string[] | undefined;
 
         if (!scopeCourseId || !validateUUID(scopeCourseId) || !newScope || !["departmental", "shared", "general"].includes(newScope)) {
           return NextResponse.json({ error: "course_id and valid scope required" }, { status: 400 });
@@ -1270,6 +1307,33 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
 
         const { error: scopeErr } = await service.from("courses").update(updatePayload as never).eq("id", scopeCourseId);
         if (scopeErr) throw scopeErr;
+
+        // For shared scope with programme_ids array, sync programme_courses links
+        if (newScope === "shared" && programmeIds && programmeIds.length > 0) {
+          const validIds = programmeIds.filter((pid) => validateUUID(pid));
+          if (validIds.length > 0) {
+            const { data: existingLinks } = await service
+              .from("programme_courses")
+              .select("programme_id")
+              .eq("course_id", scopeCourseId);
+            const currentIds = new Set((existingLinks ?? []).map((l: unknown) => (l as { programme_id: string }).programme_id));
+            const newIds = new Set(validIds);
+
+            // Remove links that are no longer in the set
+            const toRemove = Array.from(currentIds).filter((id) => !newIds.has(id));
+            if (toRemove.length > 0) {
+              await service.from("programme_courses").delete().eq("course_id", scopeCourseId).in("programme_id", toRemove);
+            }
+
+            // Add new links
+            const toAdd = validIds.filter((id) => !currentIds.has(id));
+            if (toAdd.length > 0) {
+              const inserts = toAdd.map((id) => ({ programme_id: id, course_id: scopeCourseId }));
+              await service.from("programme_courses").insert(inserts as never);
+            }
+          }
+        }
+
         logger.info({ event: "admin.update_course_scope", message: "Course scope updated", userId: user.id, metadata: { course_id: scopeCourseId, scope: newScope, programme_id: updatePayload.programme_id } });
         return NextResponse.json({ success: true });
       }
@@ -1785,6 +1849,34 @@ Return JSON only.`;
               await service.storage.from("pending").remove(movedPaths);
             }
             committed.push(questionId);
+
+            // Notify students and admins about the newly published bulk-upload question
+            const commitCode = group.newCourse?.code?.toUpperCase();
+            const commitTitle = group.newCourse?.title;
+            let finalCode = commitCode;
+            let finalTitle = commitTitle;
+            if (!finalCode) {
+              const { data: commitCourse } = await service
+                .from("courses")
+                .select("code, title")
+                .eq("id", courseId)
+                .maybeSingle();
+              const cc = commitCourse as unknown as { code: string; title: string } | null;
+              if (cc) { finalCode = cc.code; finalTitle = cc.title; }
+            }
+            if (finalCode) {
+              notifyCourseStudents(courseId, {
+                type: "question_published",
+                title: `New question available: ${finalCode}`,
+                body: `${finalTitle || "New question"} — ${group.semester} semester ${group.year}/${Number(group.year) + 1}`,
+                link: `/questions/${questionId}`,
+              });
+              notifyAdmins({
+                type: "question_published",
+                title: `Bulk upload: ${finalCode}`,
+                body: `${finalTitle || "New question"} — ${group.semester} semester ${group.year}/${Number(group.year) + 1}`,
+              });
+            }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error({ event: "bulk_commit.group_failed", message: "Group commit failed", userId: user.id, metadata: { groupIndex: i, error: msg } });

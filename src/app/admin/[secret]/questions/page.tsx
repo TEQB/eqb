@@ -55,6 +55,7 @@ export default function AdminQuestionsPage({
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [selectedQuestion, setSelectedQuestion] = useState<{ id: string; code: string } | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [editYear, setEditYear] = useState("");
   const [editSemester, setEditSemester] = useState("first");
   const [editExamType, setEditExamType] = useState("examination");
@@ -68,6 +69,9 @@ export default function AdminQuestionsPage({
     fetch("/api/admin?action=programmes")
       .then((r) => r.json())
       .then((d) => { if (d.programmes) setProgrammes(d.programmes); });
+    fetch("/api/admin?action=pending-count")
+      .then((r) => r.json())
+      .then((d) => { if (d.count != null) setPendingCount(d.count); });
   }, []);
 
   useEffect(() => {
@@ -124,6 +128,9 @@ export default function AdminQuestionsPage({
         action === "approve" ? "Question approved" : action === "suspend" ? "Question suspended" : "Question deleted",
       );
       fetchQuestions();
+      fetch("/api/admin?action=pending-count")
+        .then((r) => r.json())
+        .then((d) => { if (d.count != null) setPendingCount(d.count); });
     } else {
       const data = await res.json();
       const err = data.error || "Action failed";
@@ -207,11 +214,19 @@ export default function AdminQuestionsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Questions</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Browse, filter, and manage all uploaded past questions
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Questions</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Browse, filter, and manage all uploaded past questions
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2">
+            <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-sm font-medium text-amber-800">{pendingCount} pending review</span>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

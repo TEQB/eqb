@@ -174,7 +174,7 @@ export default function AdminLogsPage() {
             placeholder="Event name..."
             value={eventFilter}
             onChange={(e) => setEventFilter(e.target.value)}
-            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-44"
+            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-full sm:w-44"
           />
 
           <input
@@ -182,7 +182,7 @@ export default function AdminLogsPage() {
             placeholder="User email..."
             value={userFilter}
             onChange={(e) => setUserFilter(e.target.value)}
-            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-44"
+            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-full sm:w-44"
           />
 
           <input
@@ -190,7 +190,7 @@ export default function AdminLogsPage() {
             placeholder="IP address..."
             value={ipFilter}
             onChange={(e) => setIpFilter(e.target.value)}
-            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-36"
+            className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 w-full sm:w-36"
           />
 
           <input

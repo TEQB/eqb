@@ -38,7 +38,7 @@ export function AdminMobileSidebar({
       />
       <div
         ref={sheetRef}
-        className="fixed left-0 top-0 h-full w-64 border-r border-white/70 bg-white/80 shadow-[0_24px_60px_rgba(63,39,50,0.18)] backdrop-blur-xl"
+        className="fixed left-0 top-0 h-full w-72 max-w-[85vw] border-r border-white/70 bg-white/80 shadow-[0_24px_60px_rgba(63,39,50,0.18)] backdrop-blur-xl"
       >
         <AdminSidebar secret={secret} onClose={onClose} />
       </div>

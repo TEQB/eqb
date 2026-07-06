@@ -182,6 +182,12 @@ Return JSON only.`;
         link: `/upload?retry=true`,
       });
 
+      notifyAdmins({
+        type: "question_rejected",
+        title: `Question review failed: ${courseCode}`,
+        body: `${courseName} — All AI providers encountered errors.`,
+      });
+
       return NextResponse.json(
         { pass: false, reason: "Review could not be completed — please re-upload" },
         { status: 200 },
@@ -327,6 +333,13 @@ Return JSON only.`;
         link: `/questions/${questionId}`,
       });
 
+      notifyAdmins({
+        type: "question_published",
+        title: `Question approved: ${courseCode}`,
+        body: `${courseName} — ${question.semester} semester ${question.year}/${Number(question.year) + 1}`,
+        link: `/admin/${process.env.ADMIN_SECRET_PATH || "admin"}/questions`,
+      });
+
       return NextResponse.json({ pass: true, reason: "" });
     } else {
       const { data: allPages } = await service
@@ -355,6 +368,12 @@ Return JSON only.`;
         title: `Your ${courseCode} question was not approved`,
         body: verdict.reason,
         link: `/upload?retry=true`,
+      });
+
+      notifyAdmins({
+        type: "question_rejected",
+        title: `Question rejected: ${courseCode}`,
+        body: `${courseName} — ${verdict.reason}`,
       });
 
       return NextResponse.json({ pass: false, reason: verdict.reason });

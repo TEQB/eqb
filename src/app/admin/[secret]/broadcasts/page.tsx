@@ -309,7 +309,7 @@ export default function AdminBroadcastsPage() {
 
         <form onSubmit={handleSend} className="mt-5 space-y-4">
           {/* Recipient mode toggle */}
-          <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 rounded-xl bg-gray-50 p-3">
             <span className="text-sm font-medium text-gray-700">Send to:</span>
             <label className="inline-flex items-center gap-2">
               <input
