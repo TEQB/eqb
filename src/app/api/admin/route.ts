@@ -475,12 +475,12 @@ export async function GET(req: NextRequest) {
           solQuery = solQuery.ilike("past_questions.courses.code", `%${solSearch.replace(/[%_]/g, "").slice(0, 100)}%`);
         }
 
-        const { data: rawSols, count: solCount, error: solErr } = await solQuery
+        const { data: rawSols, count: solCount, error: solErr } = await (solQuery
           .order("created_at", { ascending: false })
-          .range(solOffset, solOffset + solPageSize - 1) as never;
+          .range(solOffset, solOffset + solPageSize - 1) as any);
 
         if (solErr) {
-          logger.error({ event: "admin.list_solutions_error", message: "Failed to list solutions", error: solErr.message });
+          logger.error({ event: "admin.list_solutions_error", message: "Failed to list solutions", error: (solErr as any)?.message });
           return NextResponse.json({ error: "Failed to load solutions" }, { status: 500 });
         }
 
@@ -577,7 +577,7 @@ export async function GET(req: NextRequest) {
 
       case "broadcast-stats": {
         const [{ count: totalBroadcasts }] = await Promise.all([
-          service.from("broadcasts").select("*", { count: "exact", head: true }),
+          (service as any).from("broadcasts").select("*", { count: "exact", head: true }),
         ]);
         return NextResponse.json({ total: totalBroadcasts ?? 0 });
       }
@@ -586,7 +586,7 @@ export async function GET(req: NextRequest) {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const [{ count: todayEvents }] = await Promise.all([
-          service.from("activity_logs").select("*", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()).lte("created_at", new Date().toISOString()),
+          (service as any).from("activity_logs").select("*", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()).lte("created_at", new Date().toISOString()),
         ]);
         return NextResponse.json({ todayEvents: todayEvents ?? 0 });
       }
@@ -1258,8 +1258,9 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
           status: "published",
         } as never);
         if (insertErr) {
-          logger.error({ event: "admin.upload_insert_failed", message: "Failed to insert question", userId: user.id, metadata: { error: insertErr.message } });
-          return NextResponse.json({ error: insertErr.message }, { status: 500 });
+          const errMsg = (insertErr as any)?.message || "Insert failed";
+          logger.error({ event: "admin.upload_insert_failed", message: "Failed to insert question", userId: user.id, metadata: { error: errMsg } });
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
         logger.info({ event: "admin.upload", message: "Admin uploaded question", userId: user.id, metadata: { course_id, file_url, question_id } });
 
@@ -1297,12 +1298,13 @@ ${recoveryLink ? `<p>Click the link below to set up your password:</p>
         if (pages.length === 0) {
           return NextResponse.json({ error: "No pages provided" }, { status: 400 });
         }
-        const { error: insertErr } = await service
+        const { error: insertErr } = await (service
           .from("past_question_pages")
-          .insert(pages as never);
+          .insert(pages as never) as any);
         if (insertErr) {
-          logger.error({ event: "admin.insert_pages_failed", message: "Failed to insert pages", userId: user.id, metadata: { error: insertErr.message, count: pages.length } });
-          return NextResponse.json({ error: insertErr.message }, { status: 500 });
+          const errMsg = (insertErr as any)?.message || "Insert failed";
+          logger.error({ event: "admin.insert_pages_failed", message: "Failed to insert pages", userId: user.id, metadata: { error: errMsg, count: pages.length } });
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
         logger.info({ event: "admin.insert_pages", message: "Pages inserted", userId: user.id, metadata: { count: pages.length } });
         return NextResponse.json({ success: true });
