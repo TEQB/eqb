@@ -9,6 +9,25 @@ type NotificationInput = {
   metadata?: Record<string, unknown>;
 };
 
+async function sendPushNotification(profileId: string, title: string, body: string | undefined, data: Record<string, unknown>) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
+
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ profileId, title, body: body ?? title, data }),
+    });
+  } catch (err) {
+    console.error("Failed to send push notification:", err);
+  }
+}
+
 export async function createNotification(input: NotificationInput) {
   const service = createServiceClient();
   const { error } = await (service as any).from("notifications").insert({
@@ -21,7 +40,13 @@ export async function createNotification(input: NotificationInput) {
   });
   if (error) {
     console.error("Failed to create notification:", error.message);
+    return;
   }
+
+  await sendPushNotification(input.user_id, input.title, input.body, {
+    type: input.type,
+    link: input.link ?? "",
+  });
 }
 
 export async function notifyAdmins(input: Omit<NotificationInput, "user_id">) {
