@@ -30,13 +30,27 @@ export async function POST(req: Request) {
 
     const { email, fullName, matricNumber, programmeId, currentLevel } = parsed.data;
 
-    const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
-    if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
-      logger.warn({ event: "otp.send.invalid_input", message: "Invalid registration input", ip, email });
-      return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
-    }
-
     const service = createServiceClient();
+
+    // Open registration: admin-configured levels may sign up with ANY email
+    // and no matric number (e.g. new 100-level intake without school email yet).
+    const { data: settingsRow } = await service
+      .from("platform_settings")
+      .select("open_registration_levels")
+      .single();
+    const openRegistrationLevels =
+      (settingsRow as unknown as { open_registration_levels: number[] | null } | null)
+        ?.open_registration_levels ?? [];
+    const isOpenRegistration =
+      currentLevel != null && openRegistrationLevels.includes(currentLevel);
+
+    if (!isOpenRegistration) {
+      const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
+      if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
+        logger.warn({ event: "otp.send.invalid_input", message: "Invalid registration input", ip, email });
+        return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
+      }
+    }
 
     // Check if email is already registered
     const { data: usersData, error: usersError } = await service.auth.admin.listUsers();
@@ -86,11 +100,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to store OTP" }, { status: 500 });
     }
 
-    if (fullName && matricNumber && programmeId && currentLevel) {
+    if (fullName && programmeId && currentLevel) {
       await service.from("pending_registrations").upsert({
         email,
         full_name: fullName,
-        matric_number: matricNumber,
+        matric_number: matricNumber || null,
         programme_id: programmeId,
         current_level: currentLevel,
       });

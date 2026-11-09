@@ -4,8 +4,18 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { createServiceClient } from "@/lib/supabase/service";
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("platform_settings")
+    .select("open_registration_levels")
+    .single();
+  const openRegistrationLevels =
+    (data as unknown as { open_registration_levels: number[] | null } | null)
+      ?.open_registration_levels ?? [];
+
   return (
     <AuthShell
       page="register"
@@ -20,7 +30,9 @@ export default function RegisterPage() {
           Join the community
         </h1>
         <p className="mt-3 text-sm leading-7 text-gray-600 sm:text-base">
-          Sign up with your university email to get started.
+          {openRegistrationLevels.length > 0
+            ? "Sign up with your email to get started. New students can use any email and add details later."
+            : "Sign up with your university email to get started."}
         </p>
       </div>
 
@@ -31,7 +43,7 @@ export default function RegisterPage() {
       </div>
 
       <div className="mt-8">
-        <RegisterForm />
+        <RegisterForm openRegistrationLevels={openRegistrationLevels} />
       </div>
 
       <div className="mt-6 text-center text-sm text-gray-600">

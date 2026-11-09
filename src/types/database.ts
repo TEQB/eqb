@@ -363,7 +363,7 @@ export type Database = {
           programme_id: string
           email: string
           full_name: string
-          matric_number: string
+          matric_number: string | null
         }
         Insert: {
           created_at?: string | null
@@ -371,7 +371,7 @@ export type Database = {
           programme_id: string
           email: string
           full_name: string
-          matric_number: string
+          matric_number?: string | null
         }
         Update: {
           created_at?: string | null
@@ -379,7 +379,7 @@ export type Database = {
           programme_id?: string
           email?: string
           full_name?: string
-          matric_number?: string
+          matric_number?: string | null
         }
         Relationships: []
       }
@@ -389,18 +389,24 @@ export type Database = {
           lockout_enabled: boolean
           updated_at: string | null
           upload_obligation_days: number
+          open_registration_levels: number[]
+          level_change_enabled: boolean
         }
         Insert: {
           id?: string
           lockout_enabled?: boolean
           updated_at?: string | null
           upload_obligation_days?: number
+          open_registration_levels?: number[]
+          level_change_enabled?: boolean
         }
         Update: {
           id?: string
           lockout_enabled?: boolean
           updated_at?: string | null
           upload_obligation_days?: number
+          open_registration_levels?: number[]
+          level_change_enabled?: boolean
         }
         Relationships: []
       }
@@ -414,7 +420,8 @@ export type Database = {
           id: string
           is_locked: boolean
           last_upload_at: string | null
-          matric_number: string
+          lock_reason: string | null
+          matric_number: string | null
           role: string
         }
         Insert: {
@@ -426,7 +433,8 @@ export type Database = {
           id?: string
           is_locked?: boolean
           last_upload_at?: string | null
-          matric_number: string
+          lock_reason?: string | null
+          matric_number?: string | null
           role?: string
         }
         Update: {
@@ -438,7 +446,8 @@ export type Database = {
           id?: string
           is_locked?: boolean
           last_upload_at?: string | null
-          matric_number?: string
+          lock_reason?: string | null
+          matric_number?: string | null
           role?: string
         }
         Relationships: [
@@ -595,6 +604,7 @@ export type Database = {
     }
     Functions: {
       current_student_programme: { Args: never; Returns: string }
+      update_student_level: { Args: { p_level: number }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

@@ -23,12 +23,6 @@ export async function POST(req: Request) {
     }
     const { email, password } = parsed.data;
 
-    const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
-    if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
-      logger.warn({ event: "account.create.invalid_input", message: "Invalid registration input", ip, email });
-      return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
-    }
-
     const rateKey = `create-account:${ip}:${email.toLowerCase()}`;
     if (!(await checkDbRateLimit(rateKey, 5, 60_000))) {
       logger.warn({ event: "account.create.rate_limited", message: "Account creation rate limit hit", ip, email });
@@ -56,9 +50,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No pending registration" }, { status: 400 });
     }
 
+    // Open registration: configured levels may use any email + no matric.
+    const { data: settingsRow } = await supabase
+      .from("platform_settings")
+      .select("open_registration_levels")
+      .single();
+    const openRegistrationLevels =
+      (settingsRow as unknown as { open_registration_levels: number[] | null } | null)
+        ?.open_registration_levels ?? [];
+    const isOpenRegistration =
+      reg.current_level != null && openRegistrationLevels.includes(reg.current_level);
+
+    if (!isOpenRegistration) {
+      const allowedDomain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN;
+      if (allowedDomain && !email.toLowerCase().endsWith(allowedDomain)) {
+        logger.warn({ event: "account.create.invalid_input", message: "Invalid registration input", ip, email });
+        return NextResponse.json({ error: "Invalid registration details" }, { status: 400 });
+      }
+    }
+
     const passwordCheck = validatePassword(password, {
       email,
-      matricNumber: reg.matric_number,
+      matricNumber: reg.matric_number || undefined,
     });
     if (!passwordCheck.valid) {
       logger.warn({ event: "account.create.weak_password", message: "Password does not meet strength requirements", ip, email });
@@ -77,15 +90,17 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("matric_number", (reg.matric_number || "").trim().toUpperCase())
-      .maybeSingle();
+    if (reg.matric_number && reg.matric_number.trim()) {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("matric_number", reg.matric_number.trim().toUpperCase())
+        .maybeSingle();
 
-    if (existingProfile) {
-      logger.warn({ event: "account.create.duplicate_matric", message: "Matric number already registered", ip, email, metadata: { matricNumber: reg.matric_number } });
-      return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
+      if (existingProfile) {
+        logger.warn({ event: "account.create.duplicate_matric", message: "Matric number already registered", ip, email, metadata: { matricNumber: reg.matric_number } });
+        return NextResponse.json({ error: "This matric number is already registered." }, { status: 409 });
+      }
     }
 
     const { data: userData, error: createError } = await withAuthRetry(() =>
@@ -162,6 +177,8 @@ export async function POST(req: Request) {
 <tr><td style="padding:6px 0;font-size:14px;color:#4b5563;vertical-align:top">🔍</td><td style="padding:6px 0;font-size:14px;color:#4b5563"><strong>Browse all programmes</strong> — Access past questions from every programme, not just your own.</td></tr>
 </table>
 </div>
+
+${(!reg.matric_number || !reg.matric_number.trim()) ? `<div style="margin:20px 0;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px"><p style="margin:0;font-size:13px;color:#1e40af"><strong>📝 Update your details later:</strong> You signed up without a matric number. When you receive your matric number and official university email, please update them in your profile so your account stays linked to your record.</p></div>` : ""}
 
 <div style="margin:20px 0;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">
 <p style="margin:0;font-size:13px;color:#991b1b"><strong>⚠️ Account lockout policy:</strong> To keep EQB active and growing, students who do not upload any past questions within the required period may have their accounts <strong>temporarily locked</strong>. Once locked, you will lose access until you upload a question. This is how we ensure everyone contributes to the community.</p>

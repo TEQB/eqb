@@ -19,6 +19,8 @@ export default async function AdminSettingsPage({
   const settings = raw as unknown as {
     upload_obligation_days: number;
     lockout_enabled: boolean;
+    open_registration_levels: number[] | null;
+    level_change_enabled: boolean | null;
   } | null;
 
   return (
@@ -36,6 +38,8 @@ export default async function AdminSettingsPage({
           <SettingsForm
             initialDays={settings?.upload_obligation_days ?? 30}
             initialLockout={settings?.lockout_enabled ?? true}
+            initialOpenLevels={settings?.open_registration_levels ?? []}
+            initialLevelChange={settings?.level_change_enabled ?? false}
           />
         </div>
       </section>
