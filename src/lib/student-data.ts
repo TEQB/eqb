@@ -16,12 +16,13 @@ export interface StudentProfile {
   id: string;
   auth_user_id: string;
   full_name: string;
-  matric_number: string;
+  matric_number: string | null;
   programme_id: string;
   current_level: number;
   role: string;
   last_upload_at: string | null;
   is_locked: boolean;
+  lock_reason: string | null;
   created_at: string;
   programme: StudentProgramme | null;
 }

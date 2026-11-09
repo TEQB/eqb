@@ -25,7 +25,7 @@ interface Programme {
   available_levels: number[];
 }
 
-export function RegisterForm() {
+export function RegisterForm({ openRegistrationLevels = [] }: { openRegistrationLevels?: number[] }) {
   const router = useRouter();
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
@@ -47,6 +47,9 @@ export function RegisterForm() {
 
   const selectedFaculty = watch("facultyId");
   const selectedProgramme = watch("programmeId");
+  const watchedLevel = watch("currentLevel");
+  const isOpenLevel =
+    watchedLevel != null && openRegistrationLevels.includes(Number(watchedLevel));
 
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -124,6 +127,16 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 text-left" key={shakeKey}>
+      {isOpenLevel && (
+        <div className="animate-fade-in-up rounded-2xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-left text-sm text-secondary">
+          <p className="font-semibold">New intake registration</p>
+          <p className="mt-1 text-secondary/80">
+            You can register with any email address and your matric number is optional
+            for now. Please update your matric number and school email in your profile once
+            you receive them.
+          </p>
+        </div>
+      )}
       <div className="w-full animate-fade-in-up stagger-1">
         <label htmlFor="fullName" className="mb-2 block text-sm font-semibold text-gray-700">
           Full name
@@ -136,15 +149,19 @@ export function RegisterForm() {
 
       <div className="w-full animate-fade-in-up stagger-2">
         <label htmlFor="email" className="mb-2 block text-sm font-semibold text-gray-700">
-          University email
+          {isOpenLevel ? "Email" : "University email"}
         </label>
         <Input
           id="email"
           type="email"
-          placeholder="you@university.edu.ng"
+          placeholder={isOpenLevel ? "you@example.com" : "you@university.edu.ng"}
           className="h-12 rounded-xl focus-visible:ring-[#7A1030]"
           {...register("email")}
           onBlur={(e) => {
+            if (isOpenLevel) {
+              setError("");
+              return;
+            }
             const domain = process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN || "";
             if (e.target.value && !e.target.value.endsWith(domain)) {
               setError(`Only ${domain} emails are accepted`);
@@ -163,13 +180,13 @@ export function RegisterForm() {
 
       <div className="w-full animate-fade-in-up stagger-3">
         <label className="mb-2 block text-sm font-semibold text-gray-700">
-          Matric number
+          Matric number {!isOpenLevel && <span className="text-danger-600">*</span>}
         </label>
         <Controller
           control={control}
           name="matricNumber"
           render={({ field }) => (
-            <MatricInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
+            <MatricInput value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
           )}
         />
         {errors.matricNumber && (

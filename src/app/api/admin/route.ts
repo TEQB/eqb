@@ -1031,6 +1031,11 @@ export async function POST(req: NextRequest) {
             { status: 400 },
           );
         }
+        // Open registration: levels that allow any email + optional matric.
+        const open_registration_levels = (formData.getAll("open_registration_levels") as string[])
+          .map((v) => parseInt(v, 10))
+          .filter((n) => !Number.isNaN(n) && n >= 100 && n <= 600);
+        const level_change_enabled = formData.get("level_change_enabled") === "on";
         const { data: settingsRow } = await service
           .from("platform_settings")
           .select("id")
@@ -1038,10 +1043,10 @@ export async function POST(req: NextRequest) {
         const settingsId = ((settingsRow as unknown as { id: string } | null)?.id) ?? "";
         const { error } = await service
           .from("platform_settings")
-          .update({ upload_obligation_days, lockout_enabled } as never)
+          .update({ upload_obligation_days, lockout_enabled, open_registration_levels, level_change_enabled } as never)
           .eq("id", settingsId);
         if (error) throw error;
-        logger.info({ event: "admin.update_settings", message: "Settings updated", userId: user.id, metadata: { upload_obligation_days, lockout_enabled } });
+        logger.info({ event: "admin.update_settings", message: "Settings updated", userId: user.id, metadata: { upload_obligation_days, lockout_enabled, open_registration_levels, level_change_enabled } });
         return NextResponse.json({ success: true });
       }
 

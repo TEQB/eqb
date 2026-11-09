@@ -17,7 +17,13 @@ export const verifyOtpSchema = z.object({
 export const registerSchema = z.object({
   fullName: z.string().min(2).max(100),
   email: z.string().email(),
-  matricNumber: z.string().regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ (e.g. 125/23/1/0056)"),
+  matricNumber: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ (e.g. 125/23/1/0056)")
+      .optional(),
+  ),
   facultyId: z.string().uuid(),
   programmeId: z.string().uuid(),
   currentLevel: z.preprocess(

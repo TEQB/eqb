@@ -6,6 +6,7 @@ import {
   loadStudentCourseGroups,
   loadStudentProfile,
 } from "@/lib/student-data";
+import { LockedBanner } from "@/components/upload/LockedBanner";
 
 const UploadForm = dynamic(() => import("@/components/upload/UploadForm"), { ssr: false });
 
@@ -47,6 +48,9 @@ export default async function UploadPage({
       <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5">
         <h2 className="text-xl font-semibold text-primary">Upload Past Question</h2>
       </div>
+      {searchParams.locked === "true" && (
+        <LockedBanner reason={profile.lock_reason} />
+      )}
       <UploadForm
         courses={courseGroups.allCourses}
         preselectedCourseId={preselectedCourseId}

@@ -5,6 +5,8 @@ import {
   loadUploadObligationDays,
 } from "@/lib/student-data";
 import { formatSession } from "@/lib/utils";
+import { ChangeLevelForm } from "@/components/profile/ChangeLevelForm";
+import { DetailsReminderBanner } from "@/components/profile/DetailsReminderBanner";
 
 export default async function ProfilePage() {
   const supabase = createClient();
@@ -17,14 +19,19 @@ export default async function ProfilePage() {
   const profile = await loadStudentProfile(supabase, user.id);
   if (!profile) redirect("/login");
 
-  const [obligationDays, rawUploads] = await Promise.all([
+  const [obligationDays, rawUploads, rawSettings] = await Promise.all([
     loadUploadObligationDays(supabase),
     supabase
       .from("past_questions")
       .select("id, year, semester, status, created_at, course:course_id(code)")
       .eq("uploaded_by", profile.id)
       .order("created_at", { ascending: false }),
+    supabase.from("platform_settings").select("level_change_enabled").single(),
   ]);
+
+  const levelChangeEnabled =
+    (rawSettings.data as unknown as { level_change_enabled: boolean } | null)
+      ?.level_change_enabled ?? false;
 
   const daysRemaining = profile.last_upload_at
     ? Math.max(
@@ -53,6 +60,10 @@ export default async function ProfilePage() {
         <h2 className="text-xl font-semibold text-primary">Profile</h2>
       </div>
 
+      {(!profile.matric_number || !profile.matric_number.trim()) && (
+        <DetailsReminderBanner />
+      )}
+
       <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-6 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
         <dl className="space-y-4">
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
@@ -65,7 +76,7 @@ export default async function ProfilePage() {
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">Matric</dt>
-            <dd className="mt-1 text-sm text-gray-900">{profile.matric_number}</dd>
+            <dd className="mt-1 text-sm text-gray-900">{profile.matric_number || "Not provided yet"}</dd>
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">Programme</dt>
@@ -73,7 +84,16 @@ export default async function ProfilePage() {
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">Current level</dt>
-            <dd className="mt-1 text-sm text-gray-900">{profile.current_level}</dd>
+            <dd className="mt-1">
+              {levelChangeEnabled && profile.programme?.available_levels?.length ? (
+                <ChangeLevelForm
+                  currentLevel={profile.current_level}
+                  availableLevels={profile.programme.available_levels}
+                />
+              ) : (
+                <span className="text-sm text-gray-900">{profile.current_level}</span>
+              )}
+            </dd>
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
             <dt className="text-xs font-medium uppercase text-gray-500">
