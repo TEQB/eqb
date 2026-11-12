@@ -174,10 +174,13 @@ export default function StudyGroupChatPage() {
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
     try {
-      const { error } = await supabase
-        .from("study_group_messages")
-        .insert({ group_id: id, sender_id: myProfileId, content, type: "text", reply_to_id: replyId });
-      if (error) throw error;
+      const res = await fetch(`/api/study-groups/${id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, type: "text", reply_to_id: replyId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send");
     } catch (e: any) {
       alert(e.message || "Failed to send");
       setInput(content);
@@ -200,15 +203,13 @@ export default function StudyGroupChatPage() {
       });
       if (uploadError) throw uploadError;
 
-      const { error } = await supabase.from("study_group_messages").insert({
-        group_id: id,
-        sender_id: myProfileId,
-        content: null,
-        type: "image",
-        media_url: path,
-        reply_to_id: replyTo?.id ?? null,
+      const res = await fetch(`/api/study-groups/${id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "image", media_url: path, reply_to_id: replyTo?.id ?? null }),
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send image");
       setReplyTo(null);
     } catch (e: any) {
       alert(e.message || "Failed to send image");

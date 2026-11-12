@@ -22,6 +22,36 @@ export function generateInviteCode(): string {
   return code;
 }
 
+/**
+ * Detects if message content contains phone numbers or account numbers (Nigerian formats).
+ * Returns { clean, hasRestricted } where hasRestricted is true if blocked patterns are found.
+ */
+export function sanitizeMessageContent(content: string): { clean: string; hasRestricted: boolean } {
+  // Nigerian phone patterns: +234 xxx..., 0xxx..., formats with spaces/hyphens
+  const phonePatterns = [
+    /\+234[789]\d{9}/gi,
+    /0[789]\d{9}/gi,
+    /0[789]\d{3}[-\s]?\d{3}[-\s]?\d{4}/gi,
+    /\+234[-\s]?[789]\d{2}[-\s]?\d{3}[-\s]?\d{4}/gi,
+  ];
+
+  // Account numbers: typically 10 digits (Nigerian banks)
+  const accountPattern = /\b\d{10}\b/g;
+
+  let hasRestricted = false;
+  for (const pattern of phonePatterns) {
+    if (pattern.test(content)) {
+      hasRestricted = true;
+      break;
+    }
+  }
+  if (!hasRestricted && accountPattern.test(content)) {
+    hasRestricted = true;
+  }
+
+  return { clean: content, hasRestricted };
+}
+
 /** Whether a student may view/join groups for this course (mirrors browse access). */
 export async function canAccessCourse(profile: AuthProfile, course: CourseScope): Promise<boolean> {
   if (course.scope === "general") return true;
