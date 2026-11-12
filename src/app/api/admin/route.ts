@@ -767,6 +767,47 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      case "list-announcements": {
+        const { data: raw } = await (service as any)
+          .from("announcements")
+          .select("id, title, body, display_type, duration_type, duration_value, is_active, created_at, expires_at, created_by")
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        const announcements = (raw ?? []) as Array<{
+          id: string; title: string; body: string; display_type: string;
+          duration_type: string; duration_value: number; is_active: boolean;
+          created_at: string | null; expires_at: string | null; created_by: string | null;
+        }>;
+
+        const creatorIds = Array.from(new Set(announcements.map((a) => a.created_by).filter(Boolean) as string[]));
+        let creatorNames = new Map<string, string>();
+        if (creatorIds.length > 0) {
+          const { data } = await service.from("profiles").select("id, full_name").in("id", creatorIds);
+          creatorNames = new Map(((data ?? []) as Array<{ id: string; full_name: string }>).map((p) => [p.id, p.full_name]));
+        }
+
+        const announcementIds = announcements.map((a) => a.id);
+        const readCounts = new Map<string, number>();
+        if (announcementIds.length > 0) {
+          const { data: reads } = await (service as any)
+            .from("announcement_reads")
+            .select("announcement_id")
+            .in("announcement_id", announcementIds);
+          for (const r of (reads ?? []) as Array<{ announcement_id: string }>) {
+            readCounts.set(r.announcement_id, (readCounts.get(r.announcement_id) ?? 0) + 1);
+          }
+        }
+
+        return NextResponse.json({
+          announcements: announcements.map((a) => ({
+            ...a,
+            created_by_name: a.created_by ? creatorNames.get(a.created_by) ?? "Unknown" : "—",
+            seen_count: readCounts.get(a.id) ?? 0,
+          })),
+        });
+      }
+
       default:
         logger.warn({ event: "admin.unknown_action", message: "Unknown admin GET action", ip, metadata: { action } });
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
@@ -2386,6 +2427,100 @@ Return JSON only.`;
         });
 
         return NextResponse.json({ success: true, total: students.length, successCount, failureCount, status });
+      }
+
+      case "create-announcement": {
+        const title = String(jsonBody?.title ?? "").trim();
+        const body = String(jsonBody?.body ?? "").trim();
+        const displayType = String(jsonBody?.display_type ?? "modal");
+        const durationType = String(jsonBody?.duration_type ?? "once");
+        const durationValue = parseInt(String(jsonBody?.duration_value ?? "1"), 10);
+
+        if (!title || title.length > 200) {
+          return NextResponse.json({ error: "Title is required (max 200 chars)" }, { status: 400 });
+        }
+        if (!body || body.length > 2000) {
+          return NextResponse.json({ error: "Message body is required (max 2000 chars)" }, { status: 400 });
+        }
+        if (!["modal", "banner"].includes(displayType)) {
+          return NextResponse.json({ error: "display_type must be 'modal' or 'banner'" }, { status: 400 });
+        }
+        if (!["once", "days", "weeks", "months"].includes(durationType)) {
+          return NextResponse.json({ error: "Invalid duration_type" }, { status: 400 });
+        }
+        if (!Number.isInteger(durationValue) || durationValue < 1 || durationValue > 365) {
+          return NextResponse.json({ error: "duration_value must be between 1 and 365" }, { status: 400 });
+        }
+
+        // Resolve the admin's profile id for created_by
+        const { data: adminProfileRow } = await service
+          .from("profiles")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .single();
+        const adminProfileId = (adminProfileRow as unknown as { id: string } | null)?.id ?? null;
+
+        let expiresAt: string | null = null;
+        if (durationType !== "once") {
+          const ms =
+            durationType === "days" ? durationValue * 86_400_000 :
+            durationType === "weeks" ? durationValue * 7 * 86_400_000 :
+            durationValue * 30 * 86_400_000;
+          expiresAt = new Date(Date.now() + ms).toISOString();
+        }
+
+        const { data: created, error } = await (service as any)
+          .from("announcements")
+          .insert({
+            title,
+            body,
+            display_type: displayType,
+            duration_type: durationType,
+            duration_value: durationType === "once" ? 1 : durationValue,
+            is_active: true,
+            created_by: adminProfileId,
+            expires_at: expiresAt,
+          } as never)
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        logger.info({
+          event: "admin.create_announcement",
+          message: "Announcement created",
+          userId: user.id,
+          metadata: { announcementId: (created as { id: string })?.id, displayType, durationType },
+        });
+
+        return NextResponse.json({ success: true, id: (created as { id: string })?.id });
+      }
+
+      case "toggle-announcement": {
+        const id = String(jsonBody?.id ?? "");
+        const isActive = Boolean(jsonBody?.is_active);
+        if (!validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid announcement id" }, { status: 400 });
+        }
+        const { error } = await (service as any)
+          .from("announcements")
+          .update({ is_active: isActive } as never)
+          .eq("id", id);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
+      case "delete-announcement": {
+        const id = String(jsonBody?.id ?? "");
+        if (!validateUUID(id)) {
+          return NextResponse.json({ error: "Invalid announcement id" }, { status: 400 });
+        }
+        const { error } = await (service as any)
+          .from("announcements")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
+        logger.info({ event: "admin.delete_announcement", message: "Announcement deleted", userId: user.id, metadata: { id } });
+        return NextResponse.json({ success: true });
       }
 
       default:

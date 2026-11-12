@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { MobileSidebarSheet } from "@/components/layout/MobileSidebarSheet";
 import { ObligationBanner } from "@/components/upload/ObligationBanner";
+import { Announcements } from "@/components/announcements/Announcements";
 
 interface StudentProfile {
   id: string;
@@ -67,8 +68,11 @@ export function StudentLayoutClient({
             <ObligationBanner daysRemaining={profile.daysRemaining} />
           )}
 
-          <main className="flex-1 overflow-y-auto p-4 pb-24 lg:p-8 lg:pb-8">
-            <div className="mx-auto w-full max-w-[1040px]">{children}</div>
+          <main className="flex-1 overflow-y-auto p-4 pb-28 lg:p-8 lg:pb-8">
+            <div className="mx-auto w-full max-w-[1040px]">
+              <Announcements />
+              {children}
+            </div>
           </main>
         </div>
 
