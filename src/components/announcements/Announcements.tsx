@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { X, Megaphone } from "lucide-react";
 
 interface Announcement {
@@ -14,6 +15,7 @@ interface Announcement {
 }
 
 export function Announcements() {
+  const supabase = createClient();
   const [items, setItems] = useState<Announcement[]>([]);
   const [modalQueue, setModalQueue] = useState<Announcement[]>([]);
   const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
@@ -30,30 +32,42 @@ export function Announcements() {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/announcements");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-        const list = (data.announcements ?? []) as Announcement[];
-        setItems(list);
-        const modals = list.filter((a) => a.display_type === "modal");
-        if (modals.length > 0) {
-          setModalQueue(modals);
-          // Record impressions for all queued modals
-          modals.forEach((m) => mark(m.id, "shown"));
-        }
-      } catch {
-        // non-fatal
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const res = await fetch("/api/announcements");
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = (data.announcements ?? []) as Announcement[];
+      setItems(list);
+      const modals = list.filter((a) => a.display_type === "modal");
+      if (modals.length > 0) {
+        setModalQueue(modals);
+        modals.forEach((m) => mark(m.id, "shown"));
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    } catch {
+      // non-fatal
+    }
   }, [mark]);
+
+  useEffect(() => {
+    fetchAnnouncements();
+
+    // Realtime: listen for new announcements
+    const channel = supabase
+      .channel("announcements")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "announcements" },
+        () => {
+          fetchAnnouncements();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, fetchAnnouncements]);
 
   const closeModal = (a: Announcement) => {
     setModalQueue((q) => q.filter((m) => m.id !== a.id));

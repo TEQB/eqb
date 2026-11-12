@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS announcements (
 
 CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active, expires_at);
 
+-- Enable realtime for announcements (for instant updates on web/mobile)
+ALTER PUBLICATION supabase_realtime ADD TABLE announcements;
+
 -- Tracks which users have seen/dismissed an announcement (used for "show once")
 CREATE TABLE IF NOT EXISTS announcement_reads (
   announcement_id uuid NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
