@@ -52,12 +52,12 @@ export function Announcements() {
   useEffect(() => {
     fetchAnnouncements();
 
-    // Realtime: listen for new announcements
+    // Realtime: listen for new/updated/deleted announcements
     const channel = supabase
       .channel("announcements")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "announcements" },
+        { event: "*", schema: "public", table: "announcements" },
         () => {
           fetchAnnouncements();
         },
