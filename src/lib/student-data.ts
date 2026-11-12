@@ -23,8 +23,6 @@ export interface StudentProfile {
   last_upload_at: string | null;
   is_locked: boolean;
   lock_reason: string | null;
-  phone_number: string | null;
-  bank_account_number: string | null;
   created_at: string;
   programme: StudentProgramme | null;
 }

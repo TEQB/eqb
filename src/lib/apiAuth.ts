@@ -12,8 +12,6 @@ export interface AuthProfile {
   programme_id: string;
   current_level: number;
   role: string;
-  phone_number: string | null;
-  bank_account_number: string | null;
 }
 
 /**
@@ -58,7 +56,7 @@ export async function getAuthProfile(req: NextRequest): Promise<AuthProfile | nu
   const service = createServiceClient();
   const { data: raw } = await service
     .from("profiles")
-    .select("id, auth_user_id, full_name, matric_number, programme_id, current_level, role, phone_number, bank_account_number")
+    .select("id, auth_user_id, full_name, matric_number, programme_id, current_level, role")
     .eq("auth_user_id", userId)
     .single();
 

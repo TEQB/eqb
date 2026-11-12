@@ -8,8 +8,6 @@ const patchSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("update-privacy"),
     share_name: z.boolean(),
-    share_phone: z.boolean(),
-    share_account_number: z.boolean(),
   }),
   z.object({ action: z.literal("leave") }),
   z.object({ action: z.literal("remove-member"), member_id: z.string().uuid() }),
@@ -33,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const { data: rawMembers } = await service
       .from("study_group_members")
-      .select("id, profile_id, role, share_name, share_phone, share_account_number, joined_at")
+      .select("id, profile_id, role, share_name, joined_at")
       .eq("group_id", groupId)
       .order("joined_at", { ascending: true });
 
@@ -41,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const { data: rawProfiles } = memberProfileIds.length
       ? await service
           .from("profiles")
-          .select("id, matric_number, full_name, phone_number, bank_account_number, current_level, programmes(name)")
+          .select("id, matric_number, full_name, current_level, programmes(name)")
           .in("id", memberProfileIds)
       : { data: [] };
 
@@ -56,15 +54,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         joined_at: m.joined_at,
         is_me: m.profile_id === profile.id,
         matric_number: p?.matric_number ?? null,
-        // Identity is matric number by default; name/contact only when shared
+        // Identity is matric number by default; name only when shared
         full_name: m.share_name ? p?.full_name ?? null : null,
-        phone_number: m.share_phone ? p?.phone_number ?? null : null,
-        bank_account_number: m.share_account_number ? p?.bank_account_number ?? null : null,
         programme_name: p?.programmes?.name ?? null,
         current_level: p?.current_level ?? null,
         share_name: m.share_name,
-        share_phone: m.share_phone,
-        share_account_number: m.share_account_number,
       };
     });
 
@@ -111,8 +105,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         .from("study_group_members")
         .update({
           share_name: parsed.data.share_name,
-          share_phone: parsed.data.share_phone,
-          share_account_number: parsed.data.share_account_number,
         })
         .eq("id", member.id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     if (mineOnly) {
       const { data: memberships } = await service
         .from("study_group_members")
-        .select("group_id, role, share_name, share_phone, share_account_number, joined_at")
+        .select("group_id, role, share_name, joined_at")
         .eq("profile_id", profile.id);
 
       const groupIds = ((memberships ?? []) as Array<{ group_id: string }>).map((m) => m.group_id);
@@ -85,8 +85,6 @@ export async function GET(req: NextRequest) {
           my_role: memberMap.get(g.id)?.role,
           my_privacy: {
             share_name: memberMap.get(g.id)?.share_name,
-            share_phone: memberMap.get(g.id)?.share_phone,
-            share_account_number: memberMap.get(g.id)?.share_account_number,
           },
         })),
       });

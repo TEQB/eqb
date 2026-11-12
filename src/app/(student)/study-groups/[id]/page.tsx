@@ -27,13 +27,9 @@ interface GroupMember {
   is_me: boolean;
   matric_number: string | null;
   full_name: string | null;
-  phone_number: string | null;
-  bank_account_number: string | null;
   programme_name: string | null;
   current_level: number | null;
   share_name: boolean;
-  share_phone: boolean;
-  share_account_number: boolean;
 }
 
 interface GroupDetail {
@@ -243,13 +239,10 @@ export default function StudyGroupChatPage() {
     loadDetail();
   };
 
-  const updatePrivacy = async (key: "share_name" | "share_phone" | "share_account_number", value: boolean) => {
+  const updatePrivacy = async (key: "share_name", value: boolean) => {
     if (!myMembership) return;
     const next = {
-      share_name: myMembership.share_name,
-      share_phone: myMembership.share_phone,
-      share_account_number: myMembership.share_account_number,
-      [key]: value,
+      share_name: value,
     };
     await fetch(`/api/study-groups/${id}`, {
       method: "PATCH",
@@ -430,8 +423,6 @@ export default function StudyGroupChatPage() {
             </p>
             {([
               ["share_name", "Share my name"],
-              ["share_phone", "Share my phone number"],
-              ["share_account_number", "Share my account number"],
             ] as const).map(([key, label]) => (
               <label key={key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <span className="text-sm text-gray-700">{label}</span>
@@ -466,8 +457,6 @@ export default function StudyGroupChatPage() {
                   <p className="text-xs text-gray-500 mt-0.5">
                     {m.programme_name ?? ""}{m.current_level ? ` · Level ${m.current_level}` : ""}
                   </p>
-                  {m.phone_number && <p className="text-xs text-gray-500 mt-0.5">📞 {m.phone_number}</p>}
-                  {m.bank_account_number && <p className="text-xs text-gray-500">🏦 {m.bank_account_number}</p>}
                 </div>
                 {isAdmin && !m.is_me && (
                   <button onClick={() => handleRemoveMember(m.profile_id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
