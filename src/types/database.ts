@@ -422,6 +422,8 @@ export type Database = {
           last_upload_at: string | null
           lock_reason: string | null
           matric_number: string | null
+          phone_number: string | null
+          bank_account_number: string | null
           role: string
         }
         Insert: {
@@ -435,6 +437,8 @@ export type Database = {
           last_upload_at?: string | null
           lock_reason?: string | null
           matric_number?: string | null
+          phone_number?: string | null
+          bank_account_number?: string | null
           role?: string
         }
         Update: {
@@ -448,6 +452,8 @@ export type Database = {
           last_upload_at?: string | null
           lock_reason?: string | null
           matric_number?: string | null
+          phone_number?: string | null
+          bank_account_number?: string | null
           role?: string
         }
         Relationships: [
@@ -594,6 +600,233 @@ export type Database = {
             columns: ["solution_id"]
             isOneToOne: false
             referencedRelation: "solutions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_groups: {
+        Row: {
+          id: string
+          course_id: string
+          name: string
+          description: string | null
+          invite_code: string
+          created_by: string
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          course_id: string
+          name: string
+          description?: string | null
+          invite_code: string
+          created_by: string
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          name?: string
+          description?: string | null
+          invite_code?: string
+          created_by?: string
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_groups_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_group_members: {
+        Row: {
+          id: string
+          group_id: string
+          profile_id: string
+          role: string
+          share_name: boolean
+          share_phone: boolean
+          share_account_number: boolean
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          profile_id: string
+          role?: string
+          share_name?: boolean
+          share_phone?: boolean
+          share_account_number?: boolean
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          profile_id?: string
+          role?: string
+          share_name?: boolean
+          share_phone?: boolean
+          share_account_number?: boolean
+          joined_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_group_messages: {
+        Row: {
+          id: string
+          group_id: string
+          sender_id: string
+          content: string | null
+          type: string
+          media_url: string | null
+          reply_to_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          sender_id: string
+          content?: string | null
+          type?: string
+          media_url?: string | null
+          reply_to_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          sender_id?: string
+          content?: string | null
+          type?: string
+          media_url?: string | null
+          reply_to_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          id: string
+          title: string
+          body: string
+          display_type: string
+          duration_type: string
+          duration_value: number
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          expires_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          body: string
+          display_type?: string
+          duration_type?: string
+          duration_value?: number
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          body?: string
+          display_type?: string
+          duration_type?: string
+          duration_value?: number
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          profile_id: string
+          first_shown_at: string
+          dismissed_at: string | null
+        }
+        Insert: {
+          announcement_id: string
+          profile_id: string
+          first_shown_at?: string
+          dismissed_at?: string | null
+        }
+        Update: {
+          announcement_id?: string
+          profile_id?: string
+          first_shown_at?: string
+          dismissed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

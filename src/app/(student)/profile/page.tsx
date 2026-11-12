@@ -7,6 +7,7 @@ import {
 import { formatSession } from "@/lib/utils";
 import { ChangeLevelForm } from "@/components/profile/ChangeLevelForm";
 import { DetailsReminderBanner } from "@/components/profile/DetailsReminderBanner";
+import { ContactDetailsForm } from "@/components/profile/ContactDetailsForm";
 
 export default async function ProfilePage() {
   const supabase = createClient();
@@ -106,6 +107,16 @@ export default async function ProfilePage() {
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="rounded-[1.75rem] border border-white/70 bg-white/75 p-6 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-4">
+          Contact details
+        </h3>
+        <ContactDetailsForm
+          phoneNumber={profile.phone_number}
+          bankAccountNumber={profile.bank_account_number}
+        />
       </div>
 
       <div className="animate-fade-in-up stagger-2">
