@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Download, Smartphone } from "lucide-react";
 import { CourseGrid } from "@/components/browse/CourseGrid";
 import { LevelTabs } from "@/components/browse/LevelTabs";
 import {
@@ -33,6 +34,12 @@ export default async function DashboardPage({
     courseGroups.allCourses.map((c) => c.id),
   );
   const feedbackCount = await loadStudentFeedbackCount(supabase, profile.id);
+
+  const { data: settingsRow } = await supabase
+    .from("platform_settings")
+    .select("apk_download_url")
+    .single();
+  const apkUrl = (settingsRow as unknown as { apk_download_url: string | null } | null)?.apk_download_url ?? null;
 
   const withCount = <T extends { id: string }>(c: T) => ({
     ...c,
@@ -80,6 +87,27 @@ export default async function DashboardPage({
           </Link>
         </div>
       </div>
+
+      {apkUrl && (
+        <a
+          href={apkUrl}
+          download
+          className="animate-fade-in-up flex items-center justify-between gap-4 rounded-[1.75rem] border border-primary/20 bg-gradient-to-r from-primary/10 to-secondary/10 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_55px_rgba(63,39,50,0.12)]"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-white">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-primary">Get the EQB mobile app</p>
+              <p className="text-sm text-gray-600">Download the latest APK for Android</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white">
+            <Download className="h-4 w-4" /> Download
+          </span>
+        </a>
+      )}
 
       <section className="animate-fade-in-up stagger-1">
         <div className="mb-4">

@@ -1077,6 +1077,14 @@ export async function POST(req: NextRequest) {
           .map((v) => parseInt(v, 10))
           .filter((n) => !Number.isNaN(n) && n >= 100 && n <= 600);
         const level_change_enabled = formData.get("level_change_enabled") === "on";
+        const apk_download_url_raw = (formData.get("apk_download_url") as string | null)?.trim() ?? "";
+        const apk_download_url = apk_download_url_raw || null;
+        if (apk_download_url && !/^https?:\/\//i.test(apk_download_url)) {
+          return NextResponse.json(
+            { error: "APK download link must be a valid http(s) URL" },
+            { status: 400 },
+          );
+        }
         const { data: settingsRow } = await service
           .from("platform_settings")
           .select("id")
@@ -1084,7 +1092,7 @@ export async function POST(req: NextRequest) {
         const settingsId = ((settingsRow as unknown as { id: string } | null)?.id) ?? "";
         const { error } = await service
           .from("platform_settings")
-          .update({ upload_obligation_days, lockout_enabled, open_registration_levels, level_change_enabled } as never)
+          .update({ upload_obligation_days, lockout_enabled, open_registration_levels, level_change_enabled, apk_download_url } as never)
           .eq("id", settingsId);
         if (error) throw error;
         logger.info({ event: "admin.update_settings", message: "Settings updated", userId: user.id, metadata: { upload_obligation_days, lockout_enabled, open_registration_levels, level_change_enabled } });

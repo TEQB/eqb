@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LandingNavbar } from "@/components/landing/LandingNavbar";
@@ -21,6 +22,8 @@ import {
   Search,
   Upload,
   Shield,
+  Download,
+  Smartphone,
 } from "lucide-react";
 
 const howItWorks = [
@@ -121,7 +124,14 @@ const faqs = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = createClient();
+  const { data: settingsRow } = await supabase
+    .from("platform_settings")
+    .select("apk_download_url")
+    .single();
+  const apkUrl = (settingsRow as unknown as { apk_download_url: string | null } | null)?.apk_download_url ?? null;
+
   return (
     <>
       <SplashWrapper />
@@ -165,6 +175,16 @@ export default function LandingPage() {
                 >
                   Browse Questions
                 </a>
+                {apkUrl && (
+                  <a
+                    href={apkUrl}
+                    download
+                    className="inline-flex items-center justify-center rounded-full border border-primary/30 bg-primary/5 px-6 py-3.5 text-sm font-semibold text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/10"
+                  >
+                    <Smartphone className="mr-2 h-4 w-4" />
+                    Download App
+                  </a>
+                )}
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-3 text-sm text-gray-600">

@@ -10,16 +10,19 @@ export function SettingsForm({
   initialLockout,
   initialOpenLevels = [],
   initialLevelChange = false,
+  initialApkUrl = "",
 }: {
   initialDays: number;
   initialLockout: boolean;
   initialOpenLevels?: number[];
   initialLevelChange?: boolean;
+  initialApkUrl?: string;
 }) {
   const [days, setDays] = useState(initialDays);
   const [lockout, setLockout] = useState(initialLockout);
   const [openLevels, setOpenLevels] = useState<number[]>(initialOpenLevels);
   const [levelChange, setLevelChange] = useState(initialLevelChange);
+  const [apkUrl, setApkUrl] = useState(initialApkUrl);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,6 +42,7 @@ export function SettingsForm({
     if (lockout) formData.set("lockout_enabled", "on");
     openLevels.forEach((l) => formData.append("open_registration_levels", String(l)));
     if (levelChange) formData.set("level_change_enabled", "on");
+    formData.set("apk_download_url", apkUrl.trim());
 
     const res = await fetch("/api/admin?action=update-settings", {
       method: "POST",
@@ -146,6 +150,24 @@ export function SettingsForm({
             They can only choose from levels available for their programme.
           </p>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Mobile app download link (APK)
+        </label>
+        <p className="mt-0.5 text-xs text-gray-400">
+          Direct URL to the latest APK (e.g. a Google Drive or hosted file link).
+          Shown as a download button on the landing page, student dashboard, and
+          mobile app home screen. Leave empty to hide it.
+        </p>
+        <input
+          type="url"
+          value={apkUrl}
+          onChange={(e) => setApkUrl(e.target.value)}
+          placeholder="https://example.com/eqb-app.apk"
+          className="mt-2 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+        />
       </div>
 
       <button
