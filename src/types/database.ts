@@ -391,6 +391,7 @@ export type Database = {
           upload_obligation_days: number
           open_registration_levels: number[]
           level_change_enabled: boolean
+          apk_download_url: string | null
         }
         Insert: {
           id?: string
@@ -399,6 +400,7 @@ export type Database = {
           upload_obligation_days?: number
           open_registration_levels?: number[]
           level_change_enabled?: boolean
+          apk_download_url?: string | null
         }
         Update: {
           id?: string
@@ -407,6 +409,7 @@ export type Database = {
           upload_obligation_days?: number
           open_registration_levels?: number[]
           level_change_enabled?: boolean
+          apk_download_url?: string | null
         }
         Relationships: []
       }

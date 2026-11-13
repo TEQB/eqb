@@ -21,6 +21,7 @@ export default async function AdminSettingsPage({
     lockout_enabled: boolean;
     open_registration_levels: number[] | null;
     level_change_enabled: boolean | null;
+    apk_download_url: string | null;
   } | null;
 
   return (
@@ -40,6 +41,7 @@ export default async function AdminSettingsPage({
             initialLockout={settings?.lockout_enabled ?? true}
             initialOpenLevels={settings?.open_registration_levels ?? []}
             initialLevelChange={settings?.level_change_enabled ?? false}
+            initialApkUrl={settings?.apk_download_url ?? ""}
           />
         </div>
       </section>
