@@ -12,6 +12,44 @@ const messageSchema = z.object({
   reply_to_id: z.string().uuid().nullable().optional(),
 });
 
+const MESSAGE_SELECT = "id, group_id, sender_id, content, type, media_url, reply_to_id, created_at";
+
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const profile = await getAuthProfile(req);
+  if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const service = createServiceClient();
+  const groupId = params.id;
+
+  try {
+    const { data: membership } = await service
+      .from("study_group_members")
+      .select("id")
+      .eq("group_id", groupId)
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return NextResponse.json({ error: "You are not a member of this group" }, { status: 403 });
+    }
+
+    const { data, error } = await service
+      .from("study_group_messages")
+      .select(MESSAGE_SELECT)
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    return NextResponse.json({ messages: (data ?? []).slice().reverse() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ event: "study_groups.messages_load_failed", message: msg, userId: profile.id, metadata: { groupId } });
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const profile = await getAuthProfile(req);
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -77,14 +115,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
-    const { error } = await service.from("study_group_messages").insert({
-      group_id: groupId,
-      sender_id: profile.id,
-      content: content?.trim() || null,
-      type,
-      media_url,
-      reply_to_id,
-    });
+    const { data: message, error } = await service
+      .from("study_group_messages")
+      .insert({
+        group_id: groupId,
+        sender_id: profile.id,
+        content: content?.trim() || null,
+        type,
+        media_url,
+        reply_to_id,
+      })
+      .select(MESSAGE_SELECT)
+      .single();
 
     if (error) throw error;
 
@@ -95,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       metadata: { groupId, type },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ event: "study_groups.message_failed", message: msg, userId: profile.id, metadata: { groupId } });

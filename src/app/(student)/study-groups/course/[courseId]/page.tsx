@@ -10,6 +10,7 @@ interface StudyGroup {
   id: string;
   name: string;
   description: string | null;
+  invite_code?: string;
   member_count?: number;
   is_member?: boolean;
 }
@@ -33,6 +34,7 @@ export default function CourseStudyGroupsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -58,6 +60,33 @@ export default function CourseStudyGroupsPage() {
   }, [courseId]);
 
   const canCreate = groups.length < 2;
+
+  const handleGroupPress = async (group: StudyGroup) => {
+    if (group.is_member) {
+      router.push(`/study-groups/${group.id}`);
+      return;
+    }
+    if (!group.invite_code) {
+      setError("Invite code unavailable for this group.");
+      return;
+    }
+    setJoiningId(group.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/study-groups/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_code: group.invite_code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to join");
+      router.push(`/study-groups/${data.group_id ?? group.id}`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setJoiningId(null);
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -101,34 +130,52 @@ export default function CourseStudyGroupsPage() {
         <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
           Groups for this course ({groups.length}/2)
         </h2>
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
         {loading ? (
           <p className="text-gray-500">Loading...</p>
         ) : (
           <div className="space-y-3">
-            {groups.map((g) => (
-              <Link
-                key={g.id}
-                href={`/study-groups/${g.id}`}
-                className="bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <div className="w-11 h-11 bg-[#7A1030]/10 rounded-xl flex items-center justify-center">
-                  <MessageCircle size={20} className="text-[#7A1030]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">{g.name}</p>
-                  {g.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{g.description}</p>}
-                  <div className="flex items-center gap-2 mt-1">
-                    <Users size={12} className="text-gray-400" />
-                    <span className="text-xs text-gray-500">{g.member_count ?? 0} members</span>
-                    {g.is_member && (
-                      <span className="bg-[#7A1030]/10 text-[#7A1030] text-[10px] font-semibold rounded-full px-2 py-0.5">Joined</span>
+            {groups.map((g) => {
+              const joining = joiningId === g.id;
+              return (
+                <div
+                  key={g.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleGroupPress(g)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleGroupPress(g);
+                    }
+                  }}
+                  className="bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <div className="w-11 h-11 bg-[#7A1030]/10 rounded-xl flex items-center justify-center">
+                    <MessageCircle size={20} className="text-[#7A1030]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{g.name}</p>
+                    {g.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{g.description}</p>}
+                    <div className="flex items-center gap-2 mt-1">
+                      <Users size={12} className="text-gray-400" />
+                      <span className="text-xs text-gray-500">{g.member_count ?? 0} members</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 ${g.is_member ? "bg-[#7A1030]/10 text-[#7A1030]" : "bg-gray-100 text-gray-600"}`}>
+                      {g.is_member ? "Joined" : "Join"}
+                    </span>
+                    {joining ? (
+                      <span className="text-[10px] text-gray-400">Joining...</span>
+                    ) : (
+                      <ChevronRight size={18} className="text-gray-400" />
                     )}
                   </div>
                 </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-            ))}
+              );
+            })}
 
             {groups.length === 0 && (
               <div className="bg-white rounded-2xl p-8 text-center border border-gray-100">
@@ -157,7 +204,7 @@ export default function CourseStudyGroupsPage() {
       {/* Create modal */}
       {createOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setCreateOpen(false)}>
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Create group</h2>
               <button onClick={() => setCreateOpen(false)} className="text-gray-500 hover:text-gray-800">

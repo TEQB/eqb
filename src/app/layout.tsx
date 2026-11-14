@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import "./globals.css";
 import { validateEnv } from "@/lib/env";
@@ -73,10 +72,8 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased [scrollbar-width:thin] selection:bg-secondary selection:text-white" suppressHydrationWarning>
         <AuthProvider>
-          <Suspense fallback={null}>
-            <ActivityTracker />
-            <SessionManager />
-          </Suspense>
+          <ActivityTracker />
+          <SessionManager />
           {children}
           <Toaster />
         </AuthProvider>

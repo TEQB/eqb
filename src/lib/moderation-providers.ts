@@ -13,7 +13,7 @@ type ProviderFn = (args: {
   prompt: string;
 }) => Promise<ModerationVerdict>;
 
-const PROVIDER_ORDER_ENV = process.env.MODERATION_PROVIDER_ORDER || "groq,nvidia,gemini";
+const PROVIDER_ORDER_ENV = process.env.MODERATION_PROVIDER_ORDER || "gemini,nvidia,groq";
 
 const PROVIDER_FN_MAP: Record<string, ProviderFn> = {};
 
@@ -122,7 +122,7 @@ export async function callGroqModeration({
   prompt: string;
 }): Promise<ModerationVerdict> {
   const apiKey = process.env.GROQ_API_KEY!;
-  const model = process.env.GROQ_MODERATION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+  const model = process.env.GROQ_MODERATION_MODEL || "qwen/qwen3.8-27b";
   const fileBase64 = base64FromBytes(imageBytes);
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -212,7 +212,7 @@ export async function callNvidiaModeration({
   const model = process.env.NVIDIA_MODERATION_MODEL;
   if (!model) {
     throw new Error(
-      "NVIDIA provider selected but NVIDIA_MODERATION_MODEL is not set. Set it to a valid NVIDIA NIM model ID (e.g. meta/llama-4-scout-17b-16e-instruct).",
+      "NVIDIA provider selected but NVIDIA_MODERATION_MODEL is not set. Set it to a valid NVIDIA NIM model ID (e.g. meta/llama-3.2-90b-vision-instruct).",
     );
   }
   const fileBase64 = base64FromBytes(imageBytes);

@@ -50,24 +50,6 @@ const links = [
       </svg>
     ),
   },
-  {
-    href: "/profile",
-    label: "Profile",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-      </svg>
-    ),
-  },
-  {
-    href: "/feedback",
-    label: "Feedback",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3h6m-3 9a9 9 0 1 0-9-9c0 1.87.57 3.61 1.54 5.06L3 21l4.44-1.48A8.94 8.94 0 0 0 12 20.25Z" />
-      </svg>
-    ),
-  },
 ];
 
 export function BottomNav() {
@@ -75,7 +57,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/70 bg-white/85 shadow-[0_-12px_30px_rgba(63,39,50,0.12)] backdrop-blur-xl lg:hidden pb-[env(safe-area-inset-bottom)]">
-      <div className="flex h-16 items-stretch justify-between px-1">
+      <div className="flex h-[72px] items-stretch justify-between px-1">
         {links.map((link) => {
           const isActive = pathname.startsWith(link.href);
           return (
@@ -83,7 +65,7 @@ export function BottomNav() {
               key={link.href}
               href={link.href}
               className={cn(
-                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1 text-[10px] leading-tight transition-all duration-fast",
+                "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-1.5 text-[11px] leading-tight transition-all duration-fast",
                 isActive
                   ? "font-semibold text-secondary"
                   : "text-gray-500 hover:bg-secondary/10 hover:text-secondary",
@@ -92,7 +74,7 @@ export function BottomNav() {
               {isActive && (
                 <span className="absolute -top-1 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-secondary animate-fade-in" />
               )}
-              <span className="shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]">{link.icon}</span>
+              <span className="shrink-0 [&>svg]:h-5 [&>svg]:w-5">{link.icon}</span>
               <span className="max-w-full truncate">{link.label}</span>
             </Link>
           );

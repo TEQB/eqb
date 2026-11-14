@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -11,10 +11,9 @@ interface LevelTabsProps {
 
 export function LevelTabs({ levels, activeLevel }: LevelTabsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const handleLevelChange = (level: number) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
     params.set("level", level.toString());
     router.push(`?${params.toString()}`);
   };
