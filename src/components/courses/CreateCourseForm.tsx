@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "@/components/ui/toaster";
 import { deriveLevelAndSemesterFromCode } from "@/lib/utils";
+import { Check, ChevronDown, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Programme {
   id: string;
@@ -19,6 +21,7 @@ interface CreateCourseFormProps {
   initialCode?: string;
   initialTitle?: string;
   heading?: string;
+  stickyActions?: boolean;
 }
 
 const SEARCH_THRESHOLD = 15;
@@ -31,6 +34,7 @@ export function CreateCourseForm({
   initialCode = "",
   initialTitle = "",
   heading = "Add New Course",
+  stickyActions = false,
 }: CreateCourseFormProps) {
   const [code, setCode] = useState(initialCode);
   const [title, setTitle] = useState(initialTitle);
@@ -38,25 +42,47 @@ export function CreateCourseForm({
   const [programmeSearch, setProgrammeSearch] = useState("");
   const [scope, setScope] = useState<"general" | "shared" | "programme_specific">("programme_specific");
   const [sharedProgrammeIds, setSharedProgrammeIds] = useState<string[]>([]);
+  const [sharedProgrammeSearch, setSharedProgrammeSearch] = useState("");
+  const [programmeDropdownOpen, setProgrammeDropdownOpen] = useState(false);
   const [derivedLevel, setDerivedLevel] = useState<number | null>(null);
   const [derivedLevelDisplay, setDerivedLevelDisplay] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const programmeDropdownRef = useRef<HTMLDivElement>(null);
+  const programmeSearchRef = useRef<HTMLInputElement>(null);
 
   const isGeneralOwnership = ownership === "general";
   const selectedProgrammeId = isGeneralOwnership ? "" : ownership;
   const selectedProgramme = programmes.find((p) => p.id === selectedProgrammeId);
-  const showProgrammeSearch = programmes.length > SEARCH_THRESHOLD;
 
   const filteredProgrammes = useMemo(() => {
-    if (!programmeSearch.trim()) return programmes;
-    const q = programmeSearch.toLowerCase();
-    return programmes.filter(
+    const query = programmeSearch.trim().toLowerCase();
+    if (!query) return programmes;
+
+    const matches = programmes.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.faculty_name.toLowerCase().includes(q),
+        p.name.toLowerCase().includes(query) ||
+        p.faculty_name.toLowerCase().includes(query),
     );
-  }, [programmes, programmeSearch]);
+
+    if (selectedProgrammeId && !matches.some((p) => p.id === selectedProgrammeId)) {
+      const selected = programmes.find((p) => p.id === selectedProgrammeId);
+      return selected ? [selected, ...matches] : matches;
+    }
+
+    return matches;
+  }, [programmes, programmeSearch, selectedProgrammeId]);
+
+  const filteredSharedProgrammes = useMemo(() => {
+    const options = programmes.filter((p) => p.id !== selectedProgrammeId);
+    const query = sharedProgrammeSearch.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.faculty_name.toLowerCase().includes(query),
+    );
+  }, [programmes, selectedProgrammeId, sharedProgrammeSearch]);
 
   useEffect(() => {
     setCode(initialCode);
@@ -78,6 +104,28 @@ export function CreateCourseForm({
       setDerivedLevelDisplay("");
     }
   }, [code]);
+
+  useEffect(() => {
+    if (!programmeDropdownOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (programmeDropdownRef.current && !programmeDropdownRef.current.contains(event.target as Node)) {
+        setProgrammeDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProgrammeDropdownOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    programmeSearchRef.current?.focus();
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [programmeDropdownOpen]);
 
   const handleSubmit = async () => {
     setError("");
@@ -160,6 +208,7 @@ export function CreateCourseForm({
     setProgrammeSearch("");
     setScope("programme_specific");
     setSharedProgrammeIds([]);
+    setSharedProgrammeSearch("");
     setDerivedLevel(null);
     setDerivedLevelDisplay("");
     setError("");
@@ -194,32 +243,109 @@ export function CreateCourseForm({
 
         <div>
           <label className="block text-xs font-medium text-gray-700">Ownership</label>
-          {showProgrammeSearch && (
-            <input
-              type="text"
-              value={programmeSearch}
-              onChange={(e) => setProgrammeSearch(e.target.value)}
-              placeholder="Search programmes..."
-              className="mt-1 mb-2 block w-full rounded-md border border-gray-300 px-3.5 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-            />
-          )}
-          <select
-            value={ownership}
-            onChange={(e) => {
-              const value = e.target.value;
-              setOwnership(value);
-              setScope("programme_specific");
-              setSharedProgrammeIds([]);
-            }}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-          >
-            <option value="general">General (no owner)</option>
-            {filteredProgrammes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} {p.faculty_name ? `(${p.faculty_name})` : ""}
-              </option>
-            ))}
-          </select>
+          <div ref={programmeDropdownRef} className="relative mt-1">
+            <button
+              type="button"
+              onClick={() => setProgrammeDropdownOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 rounded-md border border-gray-300 bg-white px-3.5 py-2.5 text-left text-base transition-colors focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            >
+              <span className="min-w-0">
+                {isGeneralOwnership ? (
+                  <span className="text-gray-600">General (no owner)</span>
+                ) : selectedProgramme ? (
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium text-gray-900">{selectedProgramme.name}</span>
+                    {selectedProgramme.faculty_name && (
+                      <span className="text-xs text-gray-500">({selectedProgramme.faculty_name})</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">Select programme</span>
+                )}
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-gray-400 transition-transform", programmeDropdownOpen && "rotate-180")} />
+            </button>
+
+            {programmeDropdownOpen && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_20px_45px_rgba(63,39,50,0.16)]">
+                <div className="border-b border-gray-100 p-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      ref={programmeSearchRef}
+                      type="text"
+                      value={programmeSearch}
+                      onChange={(e) => setProgrammeSearch(e.target.value)}
+                      placeholder="Search programmes..."
+                      aria-label="Search programmes"
+                      className="block w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto p-1.5" role="listbox" aria-label="Programmes">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isGeneralOwnership}
+                    onClick={() => {
+                      setOwnership("general");
+                      setScope("programme_specific");
+                      setSharedProgrammeIds([]);
+                      setProgrammeDropdownOpen(false);
+                      setProgrammeSearch("");
+                    }}
+                    className={cn(
+                      "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-primary/5",
+                      isGeneralOwnership && "bg-primary/10",
+                    )}
+                  >
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                      {isGeneralOwnership && <Check className="h-4 w-4 text-primary" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-gray-900">
+                        General (no owner)
+                      </span>
+                    </span>
+                  </button>
+
+                  {filteredProgrammes.map((p) => {
+                    const isSelected = p.id === ownership;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setOwnership(p.id);
+                          setScope("programme_specific");
+                          setSharedProgrammeIds([]);
+                          setProgrammeDropdownOpen(false);
+                          setProgrammeSearch("");
+                        }}
+                        className={cn(
+                          "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-primary/5",
+                          isSelected && "bg-primary/10",
+                        )}
+                      >
+                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                          {isSelected && <Check className="h-4 w-4 text-primary" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-gray-900">{p.name}</span>
+                          {p.faculty_name && (
+                            <span className="block text-xs text-gray-500">{p.faculty_name}</span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {!isGeneralOwnership && selectedProgrammeId && (
@@ -231,7 +357,10 @@ export function CreateCourseForm({
                 onChange={(e) => {
                   const next = e.target.value as "general" | "shared" | "programme_specific";
                   setScope(next);
-                  if (next !== "shared") setSharedProgrammeIds([]);
+                  if (next !== "shared") {
+                    setSharedProgrammeIds([]);
+                    setSharedProgrammeSearch("");
+                  }
                 }}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
               >
@@ -246,10 +375,18 @@ export function CreateCourseForm({
                 <label className="block text-xs font-medium text-gray-700">
                   Share with Additional Programmes
                 </label>
+                <input
+                  type="text"
+                  value={sharedProgrammeSearch}
+                  onChange={(e) => setSharedProgrammeSearch(e.target.value)}
+                  placeholder="Search programmes..."
+                  className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                />
                 <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
-                  {programmes
-                    .filter((p) => p.id !== selectedProgrammeId)
-                    .map((p) => (
+                  {filteredSharedProgrammes.length === 0 ? (
+                    <p className="text-sm text-gray-500">No programmes match your search.</p>
+                  ) : (
+                    filteredSharedProgrammes.map((p) => (
                       <label key={p.id} className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
@@ -267,7 +404,8 @@ export function CreateCourseForm({
                           {p.name} {p.faculty_name ? `(${p.faculty_name})` : ""}
                         </span>
                       </label>
-                    ))}
+                    ))
+                  )}
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   The owning programme ({selectedProgramme?.name}) is automatically included.
@@ -287,7 +425,7 @@ export function CreateCourseForm({
           <p className="text-sm text-danger-600">{error}</p>
         )}
 
-        <div className="flex gap-2">
+        <div className={stickyActions ? "sticky bottom-0 z-10 -mx-1 -mb-1 flex gap-2 border-t border-gray-200 bg-white/95 px-1 py-3 backdrop-blur" : "flex gap-2"}>
           <button
             type="button"
             onClick={handleSubmit}

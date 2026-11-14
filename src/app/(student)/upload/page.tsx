@@ -56,6 +56,7 @@ export default async function UploadPage({
         preselectedCourseId={preselectedCourseId}
         currentProgrammeId={profile.programme_id}
         currentProgrammeName={profile.programme?.name ?? "My programme"}
+        currentLevel={profile.current_level}
         programmes={programmes}
         joinableSharedCourses={joinableSharedCourses}
       />

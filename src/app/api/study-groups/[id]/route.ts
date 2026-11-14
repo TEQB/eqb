@@ -29,6 +29,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const group = rawGroup as unknown as any;
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });
 
+    const { data: membership } = await service
+      .from("study_group_members")
+      .select("id")
+      .eq("group_id", groupId)
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+    if (!membership) {
+      return NextResponse.json({ error: "You are not a member of this group" }, { status: 403 });
+    }
+
     const { data: rawMembers } = await service
       .from("study_group_members")
       .select("id, profile_id, role, share_name, joined_at")

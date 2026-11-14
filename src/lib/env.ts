@@ -2,7 +2,6 @@ const REQUIRED = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "GEMINI_API_KEY",
   "RESEND_API_KEY",
   "RESEND_FROM_EMAIL",
   "NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN",
@@ -21,6 +20,9 @@ export function validateEnv(): string[] {
   const missing: string[] = [];
   for (const key of REQUIRED) {
     if (!process.env[key]) missing.push(key);
+  }
+  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY && !process.env.NVIDIA_API_KEY) {
+    missing.push("one of GEMINI_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY");
   }
   return missing;
 }

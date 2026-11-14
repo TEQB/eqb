@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { formatSession } from "@/lib/utils";
 
@@ -11,14 +11,13 @@ interface QuestionFiltersProps {
 
 export function QuestionFilters({ year, semester }: QuestionFiltersProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  const currentYear = searchParams.get("year") || year || "";
-  const currentSemester = searchParams.get("semester") || semester || "";
+  const currentYear = year || "";
+  const currentSemester = semester || "";
 
   const updateFilter = useCallback(
     (key: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(window.location.search);
       if (value) {
         params.set(key, value);
       } else {
@@ -26,7 +25,7 @@ export function QuestionFilters({ year, semester }: QuestionFiltersProps) {
       }
       router.push(`?${params.toString()}`);
     },
-    [router, searchParams],
+    [router],
   );
 
   const years = Array.from(
@@ -35,11 +34,11 @@ export function QuestionFilters({ year, semester }: QuestionFiltersProps) {
   ).reverse();
 
   return (
-    <div className="flex gap-3">
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
       <select
         value={currentYear}
         onChange={(e) => updateFilter("year", e.target.value)}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100 sm:w-auto"
       >
         <option value="">All sessions</option>
         {years.map((y) => (
@@ -52,7 +51,7 @@ export function QuestionFilters({ year, semester }: QuestionFiltersProps) {
       <select
         value={currentSemester}
         onChange={(e) => updateFilter("semester", e.target.value)}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-600 focus:ring-2 focus:ring-primary-100 sm:w-auto"
       >
         <option value="">Both semesters</option>
         <option value="first">First</option>

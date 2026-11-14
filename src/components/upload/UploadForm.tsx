@@ -11,6 +11,8 @@ import { toast } from "@/components/ui/toaster";
 import { formatSession, deriveLevelAndSemesterFromCode } from "@/lib/utils";
 import { CreateCourseForm } from "@/components/courses/CreateCourseForm";
 import { JoinSharedCourse } from "@/components/courses/JoinSharedCourse";
+import { CourseSelect } from "./CourseSelect";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 type UploadData = z.infer<typeof uploadSchema>;
 
@@ -46,6 +48,7 @@ export function UploadForm({
   programmes: initialProgrammes = [],
   currentProgrammeId = "",
   currentProgrammeName = "",
+  currentLevel,
   joinableSharedCourses: initialJoinable = [],
 }: {
   courses: Course[];
@@ -53,6 +56,7 @@ export function UploadForm({
   programmes?: Programme[];
   currentProgrammeId?: string;
   currentProgrammeName?: string;
+  currentLevel?: number;
   joinableSharedCourses?: Course[];
 }) {
   const supabase = createClient();
@@ -124,6 +128,15 @@ export function UploadForm({
     !!selectedCourse &&
     selectedCourse.scope === "shared" &&
     joinableSharedCourses.some((c) => c.id === selectedCourse.id);
+
+  const isCourseVisible = (course: Course) =>
+    currentLevel == null
+      ? true
+      : course.level === currentLevel ||
+        course.id === preselectedCourseId ||
+        course.id === selectedCourseId;
+  const visibleCourses = courses.filter(isCourseVisible);
+  const visibleJoinableSharedCourses = joinableSharedCourses.filter(isCourseVisible);
 
   useEffect(() => {
     if (!selectedCourse) return;
@@ -385,30 +398,22 @@ export function UploadForm({
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Course
+            {currentLevel && (
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                (Level {currentLevel})
+              </span>
+            )}
           </label>
+          <input type="hidden" {...register("courseId")} />
           <div className="mt-1 flex gap-2">
-            <select
-              id="courseId"
-              {...register("courseId")}
-              className="block w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-base focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
-            >
-              <option value="">Select course</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} — {c.title}
-                  {c.scope !== "departmental" ? ` (${SCOPE_LABELS[c.scope] ?? c.scope})` : ""}
-                </option>
-              ))}
-              {joinableSharedCourses.length > 0 && (
-                <optgroup label="Shared courses you can join">
-                  {joinableSharedCourses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} — {c.title} (join required)
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            <CourseSelect
+              value={selectedCourseId}
+              onChange={(courseId) =>
+                setValue("courseId", courseId, { shouldValidate: true, shouldDirty: true })
+              }
+              courses={visibleCourses}
+              joinableCourses={visibleJoinableSharedCourses}
+            />
             <button
               type="button"
               onClick={() => setShowAddCourse(true)}
@@ -517,26 +522,22 @@ export function UploadForm({
         </button>
       </form>
 
-      {showAddCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddCourse(false)}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
-          >
-            <CreateCourseForm
-              postUrl="/api/courses"
-              programmes={programmes}
-              onSuccess={(created) => {
-                setCourses((prev) => [...prev, created]);
-                setValue("courseId", created.id);
-                setShowAddCourse(false);
-                toast.success("Course added");
-              }}
-              onCancel={() => setShowAddCourse(false)}
-            />
-          </div>
-        </div>
-      )}
+      <Dialog open={showAddCourse} onOpenChange={(open) => setShowAddCourse(open)}>
+        <DialogContent className="max-w-md sm:max-w-md">
+          <CreateCourseForm
+            postUrl="/api/courses"
+            programmes={programmes}
+            stickyActions
+            onSuccess={(created) => {
+              setCourses((prev) => [...prev, created]);
+              setValue("courseId", created.id, { shouldValidate: true, shouldDirty: true });
+              setShowAddCourse(false);
+              toast.success("Course added");
+            }}
+            onCancel={() => setShowAddCourse(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

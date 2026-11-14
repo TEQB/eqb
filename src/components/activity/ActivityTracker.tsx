@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 type ActivityLevel = "info" | "warn" | "error";
 
@@ -63,12 +63,11 @@ async function sendActivity(payload: ActivityPayload) {
 
 export function ActivityTracker() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const lastPageViewRef = useRef<string>("");
 
   useEffect(() => {
     if (!pathname) return;
-    const query = searchParams?.toString() || "";
+    const query = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
     const pageKey = `${pathname}?${query}`;
     if (lastPageViewRef.current === pageKey) return;
     lastPageViewRef.current = pageKey;
@@ -80,7 +79,7 @@ export function ActivityTracker() {
       method: "GET",
       metadata: query ? { search: query } : undefined,
     });
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {

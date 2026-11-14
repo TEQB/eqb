@@ -41,10 +41,8 @@ interface GroupDetail {
   course?: { id: string; code: string; title: string; level: number };
 }
 
-const MESSAGE_SELECT = "id, group_id, sender_id, content, type, media_url, reply_to_id, created_at";
-
 function ChatImage({ path, onClick }: { path: string; onClick?: () => void }) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,7 +68,7 @@ export default function StudyGroupChatPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<"chat" | "members">("chat");
@@ -92,6 +90,15 @@ export default function StudyGroupChatPage() {
   const isAdmin = myMembership?.role === "admin";
   const memberMap = useMemo(() => new Map(members.map((m) => [m.profile_id, m])), [members]);
   const messageMap = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
+  const upsertMessage = useCallback((msg: Message) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    });
+  }, []);
 
   const senderLabel = useCallback(
     (senderId: string) => {
@@ -122,13 +129,10 @@ export default function StudyGroupChatPage() {
     (async () => {
       try {
         await loadDetail();
-        const { data } = await supabase
-          .from("study_group_messages")
-          .select(MESSAGE_SELECT)
-          .eq("group_id", id)
-          .order("created_at", { ascending: false })
-          .limit(100);
-        if (!cancelled && data) setMessages(data as Message[]);
+        const res = await fetch(`/api/study-groups/${id}/messages`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load messages");
+        if (!cancelled && data.messages) setMessages(data.messages as Message[]);
       } catch (e) {
         console.error(e);
       } finally {
@@ -149,14 +153,14 @@ export default function StudyGroupChatPage() {
         { event: "INSERT", schema: "public", table: "study_group_messages", filter: `group_id=eq.${id}` },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [msg, ...prev]));
+          upsertMessage(msg);
         },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, supabase]);
+  }, [id, supabase, upsertMessage]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -177,6 +181,7 @@ export default function StudyGroupChatPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send");
+      if (data.message) upsertMessage(data.message as Message);
     } catch (e: any) {
       alert(e.message || "Failed to send");
       setInput(content);
@@ -206,6 +211,7 @@ export default function StudyGroupChatPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send image");
+      if (data.message) upsertMessage(data.message as Message);
       setReplyTo(null);
     } catch (e: any) {
       alert(e.message || "Failed to send image");
@@ -313,7 +319,7 @@ export default function StudyGroupChatPage() {
       </div>
 
       {tab === "chat" ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col" style={{ height: "calc(100vh - 320px)", minHeight: 420 }}>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col" style={{ height: "calc(100dvh - 300px)", minHeight: 420 }}>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 ? (
               <p className="text-center text-gray-500 mt-10">No messages yet. Start the conversation!</p>
@@ -326,32 +332,32 @@ export default function StudyGroupChatPage() {
                     className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}
                     onContextMenu={(e) => { e.preventDefault(); setReplyTo(msg); }}
                   >
-                    <div className="flex items-center gap-1">
-                      {!mine && (
-                        <span className="text-xs text-gray-500 mb-0.5 ml-1">{senderLabel(msg.sender_id)}</span>
-                      )}
+                    {!mine && (
+                      <span className="text-xs text-gray-500 mb-0.5 ml-1 self-start">{senderLabel(msg.sender_id)}</span>
+                    )}
+                    <div className="relative">
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                          mine ? "bg-[#7A1030] text-white rounded-br-sm" : "bg-gray-100 text-gray-900 rounded-bl-sm"
+                        }`}
+                      >
+                        {msg.reply_to_id && renderReplyQuote(msg, mine)}
+                        {msg.type === "image" && msg.media_url ? (
+                          <ChatImage path={msg.media_url} onClick={() => openImageViewer(msg.media_url!)} />
+                        ) : (
+                          msg.content
+                        )}
+                        {msg.type === "image" && msg.content && (
+                          <p className={`text-xs mt-1 ${mine ? "text-white/80" : "text-gray-500"}`}>{msg.content}</p>
+                        )}
+                      </div>
                       <button
                         onClick={() => setReplyTo(msg)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-[#7A1030] transition-opacity"
+                        className={`absolute -top-2 ${mine ? "-left-2" : "-right-2"} opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-[#7A1030] shadow-sm transition-opacity`}
                         title="Reply"
                       >
-                        <Reply size={14} />
+                        <Reply size={12} />
                       </button>
-                    </div>
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                        mine ? "bg-[#7A1030] text-white rounded-br-sm" : "bg-gray-100 text-gray-900 rounded-bl-sm"
-                      }`}
-                    >
-                      {msg.reply_to_id && renderReplyQuote(msg, mine)}
-                      {msg.type === "image" && msg.media_url ? (
-                        <ChatImage path={msg.media_url} onClick={() => openImageViewer(msg.media_url!)} />
-                      ) : (
-                        msg.content
-                      )}
-                      {msg.type === "image" && msg.content && (
-                        <p className={`text-xs mt-1 ${mine ? "text-white/80" : "text-gray-500"}`}>{msg.content}</p>
-                      )}
                     </div>
                     <span className="text-[10px] text-gray-400 mt-0.5">
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

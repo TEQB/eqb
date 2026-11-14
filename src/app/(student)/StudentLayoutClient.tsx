@@ -1,13 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, createContext, useContext } from "react";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { MobileSidebarSheet } from "@/components/layout/MobileSidebarSheet";
 import { ObligationBanner } from "@/components/upload/ObligationBanner";
 import { Announcements } from "@/components/announcements/Announcements";
+
+const BottomNav = dynamic(
+  () => import("@/components/layout/BottomNav").then((m) => m.BottomNav),
+  { ssr: false },
+);
 
 interface StudentProfile {
   id: string;

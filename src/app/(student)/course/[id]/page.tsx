@@ -91,19 +91,23 @@ export default async function CoursePage({
   return (
     <div className="space-y-6">
       <div className="animate-fade-in-down">
-        <p className="text-sm text-gray-500">
+        <p className="truncate text-xs text-gray-500 sm:text-sm">
           <Link href="/dashboard" className="transition-colors hover:text-secondary">
             Dashboard
           </Link>{" "}
-          / {programmeName}
+          / <Link href="/browse" className="transition-colors hover:text-secondary">Browse</Link> / {programmeName || "Course"}
         </p>
-        <h2 className="mt-1 text-xl font-semibold text-primary">
+        <h2 className="mt-1 break-words text-lg font-semibold text-primary sm:text-2xl">
           <span className="font-mono">{course.code}</span> — {course.title}
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          {programmeName} · Level {course.level} ·{" "}
-          {questions?.length || 0} past question
-          {questions?.length !== 1 ? "s" : ""}
+        <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 sm:text-sm">
+          <span>{programmeName}</span>
+          <span>·</span>
+          <span>Level {course.level}</span>
+          <span>·</span>
+          <span>
+            {questions?.length || 0} past question{questions?.length !== 1 ? "s" : ""}
+          </span>
         </p>
         {isLinkedShared && studentProgrammeName && (
           <div className="mt-3">
@@ -117,24 +121,24 @@ export default async function CoursePage({
         <div className="mt-3">
           <Link
             href={`/study-groups/course/${params.id}`}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#7A1030] px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-[#5f0c26]"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#7A1030] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#5f0c26] sm:w-auto"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
             </svg>
-            Study Group
+            Study Groups
           </Link>
         </div>
       </div>
 
-      <div className="animate-fade-in-up stagger-1 flex items-center gap-4">
+      <div className="animate-fade-in-up stagger-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <QuestionFilters
           year={searchParams.year}
           semester={searchParams.semester}
         />
         <Link
           href={`/upload?courseId=${params.id}`}
-          className="ml-auto inline-flex items-center rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-white transition-all duration-normal hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_16px_30px_rgba(122,16,48,0.2)] active:scale-[0.98]"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-white transition-all duration-normal hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_16px_30px_rgba(122,16,48,0.2)] active:scale-[0.98] sm:ml-auto sm:w-auto"
         >
           <svg className="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
