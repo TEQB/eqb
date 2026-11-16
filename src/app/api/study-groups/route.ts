@@ -75,6 +75,16 @@ export async function GET(req: NextRequest) {
         .in("id", groupIds)
         .eq("is_active", true);
 
+      const { data: allMembers } = await service
+        .from("study_group_members")
+        .select("group_id")
+        .in("group_id", groupIds);
+
+      const memberCountMap = new Map<string, number>();
+      for (const m of (allMembers ?? []) as Array<{ group_id: string }>) {
+        memberCountMap.set(m.group_id, (memberCountMap.get(m.group_id) || 0) + 1);
+      }
+
       const memberMap = new Map(
         ((memberships ?? []) as any[]).map((m) => [m.group_id, m]),
       );
@@ -82,6 +92,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         groups: ((groups ?? []) as any[]).map((g) => ({
           ...g,
+          member_count: memberCountMap.get(g.id) || 0,
           my_role: memberMap.get(g.id)?.role,
           my_privacy: {
             share_name: memberMap.get(g.id)?.share_name,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MessageCircle, Users, QrCode, Search, Camera } from "lucide-react";
 import { GroupQrScanner } from "@/components/study-groups/GroupQrScanner";
+import { createClient } from "@/lib/supabase/client";
 
 interface StudyGroup {
   id: string;
@@ -16,7 +17,7 @@ interface StudyGroup {
   course?: { id: string; code: string; title: string; level: number };
 }
 
-export default function StudyGroupsPage() {
+function StudyGroupsPageInner() {
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState("");
@@ -40,6 +41,17 @@ export default function StudyGroupsPage() {
 
   useEffect(() => {
     load();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("study-groups-list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "study_groups" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "study_group_members" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleJoin = async (codeOverride?: string) => {
@@ -168,4 +180,18 @@ export default function StudyGroupsPage() {
       </div>
     </div>
   );
+}
+
+export default function StudyGroupsPageWrapper() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="p-4">Loading...</div>;
+  }
+
+  return <StudyGroupsPageInner />;
 }

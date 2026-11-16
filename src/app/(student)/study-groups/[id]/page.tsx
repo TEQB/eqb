@@ -64,7 +64,7 @@ function ChatImage({ path, onClick }: { path: string; onClick?: () => void }) {
   );
 }
 
-export default function StudyGroupChatPage() {
+function StudyGroupChatPageInner() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -154,6 +154,13 @@ export default function StudyGroupChatPage() {
         (payload) => {
           const msg = payload.new as Message;
           upsertMessage(msg);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "study_group_members", filter: `group_id=eq.${id}` },
+        () => {
+          loadDetail();
         },
       )
       .subscribe();
@@ -522,4 +529,18 @@ export default function StudyGroupChatPage() {
       )}
     </div>
   );
+}
+
+export default function StudyGroupChatPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="p-4">Loading...</div>;
+  }
+
+  return <StudyGroupChatPageInner />;
 }

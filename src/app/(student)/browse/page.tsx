@@ -1,74 +1,166 @@
-import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { PaginatedCourseGrid } from "@/components/browse/PaginatedCourseGrid";
-import { JoinSharedCourse } from "@/components/courses/JoinSharedCourse";
-import { LeaveSharedCourse } from "@/components/courses/LeaveSharedCourse";
-import { VoteButtons } from "@/components/courses/VoteButtons";
-import {
-  loadJoinableSharedCourses,
-  loadLinkedSharedCourseIds,
-  loadPendingSharedRequests,
-  loadPublishedQuestionCounts,
-  loadStudentCourseGroups,
-  loadStudentProfile,
-} from "@/lib/student-data";
+"use client";
 
-export default async function BrowsePage({
-  searchParams,
-}: {
-  searchParams: { q?: string; level?: string };
-}) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { BrowseTabs } from "@/components/browse/BrowseTabs";
 
-  if (!user) redirect("/login");
-  const profile = await loadStudentProfile(supabase, user.id);
-  if (!profile) redirect("/login");
+export default function BrowsePage() {
+  const searchParams = useSearchParams();
+  const search = (searchParams.get("q") || "").toLowerCase();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<{
+    courses: any[];
+    linkedShared: any[];
+    joinable: any[];
+    pendingRequests: any[];
+    pendingJoinCourseIds: Set<string>;
+    pendingLeaveCourseIds: Set<string>;
+    linkedSharedIds: Set<string>;
+    programmeName: string;
+    profileId: string;
+  } | null>(null);
 
-  const search = (searchParams.q || "").toLowerCase();
+  const load = async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  const [courseGroups, joinableSharedCourses, linkedSharedIds, pendingRequests] = await Promise.all([
-    loadStudentCourseGroups(supabase, profile.programme_id),
-    loadJoinableSharedCourses(profile.programme_id),
-    loadLinkedSharedCourseIds(profile.programme_id),
-    loadPendingSharedRequests(profile.programme_id, profile.id),
-  ]);
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
 
-  const pendingJoinCourseIds = new Set(
-    pendingRequests.filter((r) => r.action_type === "join").map((r) => r.course_id),
-  );
-  const pendingLeaveCourseIds = new Set(
-    pendingRequests.filter((r) => r.action_type === "leave").map((r) => r.course_id),
-  );
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, programme_id, programme:programme_id(name)")
+        .eq("auth_user_id", user.id)
+        .single();
 
-  const questionCounts = await loadPublishedQuestionCounts(
-    supabase,
-    courseGroups.allCourses.map((c) => c.id),
-  );
+      if (!profile) {
+        window.location.href = "/login";
+        return;
+      }
 
-  let courses = courseGroups.allCourses.map((c) => ({
-    ...c,
-    questionCount: questionCounts[c.id] || 0,
-  }));
+      const programmeId = (profile as any).programme_id;
+      const profileId = (profile as any).id;
+      const programmeName = (profile as any).programme?.name ?? "My programme";
 
-  let joinable = joinableSharedCourses.filter((c) => !pendingJoinCourseIds.has(c.id));
-  if (search) {
-    courses = courses.filter(
-      (c) =>
-        c.code.toLowerCase().includes(search) ||
-        c.title.toLowerCase().includes(search),
-    );
-    joinable = joinable.filter(
-      (c) =>
-        c.code.toLowerCase().includes(search) ||
-        c.title.toLowerCase().includes(search),
+      const [courseRes, joinableRes, linkedRes, pendingRes] = await Promise.all([
+        fetch(`/api/browse/courses?programme_id=${programmeId}`),
+        fetch(`/api/browse/joinable?programme_id=${programmeId}`),
+        fetch(`/api/browse/linked?programme_id=${programmeId}`),
+        fetch(`/api/browse/pending?programme_id=${programmeId}&profile_id=${profileId}`),
+      ]);
+
+      const [courseData, joinableData, linkedData, pendingData] = await Promise.all([
+        courseRes.json(),
+        joinableRes.json(),
+        linkedRes.json(),
+        pendingRes.json(),
+      ]);
+
+      const pendingJoinCourseIds = new Set<string>(
+        (pendingData.requests || [])
+          .filter((r: any) => r.action_type === "join")
+          .map((r: any) => r.course_id as string),
+      );
+      const pendingLeaveCourseIds = new Set<string>(
+        (pendingData.requests || [])
+          .filter((r: any) => r.action_type === "leave")
+          .map((r: any) => r.course_id as string),
+      );
+
+      let courses = courseData.courses || [];
+      let joinable = (joinableData.courses || []).filter(
+        (c: any) => !pendingJoinCourseIds.has(c.id),
+      );
+
+      if (search) {
+        courses = courses.filter(
+          (c: any) =>
+            c.code.toLowerCase().includes(search) ||
+            c.title.toLowerCase().includes(search),
+        );
+        joinable = joinable.filter(
+          (c: any) =>
+            c.code.toLowerCase().includes(search) ||
+            c.title.toLowerCase().includes(search),
+        );
+      }
+
+      const linkedSharedIds = new Set<string>(linkedData.courseIds || []);
+      const linkedShared = courses.filter((c: any) => linkedSharedIds.has(c.id));
+
+      setData({
+        courses,
+        linkedShared,
+        joinable,
+        pendingRequests: pendingData.requests || [],
+        pendingJoinCourseIds,
+        pendingLeaveCourseIds,
+        linkedSharedIds,
+        programmeName,
+        profileId,
+      });
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("browse-courses")
+      .on("postgres_changes", { event: "*", schema: "public", table: "courses" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "programme_courses" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "shared_course_requests" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [search]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5">
+          <h2 className="text-xl font-semibold text-primary">Browse Courses</h2>
+        </div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 rounded-xl bg-gray-200" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-40 rounded-2xl bg-gray-200" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
-  const programmeName = profile.programme?.name ?? "My programme";
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5">
+          <h2 className="text-xl font-semibold text-primary">Browse Courses</h2>
+        </div>
+        <div className="rounded-[1.75rem] border border-red-200 bg-red-50 p-5">
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <div className="space-y-6">
@@ -81,125 +173,18 @@ export default async function BrowsePage({
         )}
       </div>
 
-      <div className="animate-fade-in-up">
-        <PaginatedCourseGrid
-          courses={courses}
-          emptyMessage={search ? `No courses matching "${search}"` : "No courses available."}
-        />
-      </div>
-
-      {linkedSharedIds.size > 0 && (() => {
-        const linkedShared = courses.filter((c) => linkedSharedIds.has(c.id));
-        if (linkedShared.length === 0) return null;
-        return (
-          <div className="space-y-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
-            <h3 className="text-lg font-semibold text-primary">Linked Shared Courses</h3>
-            <p className="text-sm text-gray-500">
-              Your programme is linked to these shared courses. Removal requires approval from your programme-mates.
-            </p>
-            <ul className="space-y-3">
-              {linkedShared.map((course) => {
-                const hasPendingLeave = pendingLeaveCourseIds.has(course.id);
-                return (
-                  <li
-                    key={course.id}
-                    className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <p className="font-mono text-sm font-medium text-gray-900">{course.code}</p>
-                      <p className="text-sm text-gray-600">{course.title}</p>
-                      <p className="text-xs text-gray-400">Level {course.level}</p>
-                    </div>
-                    {hasPendingLeave ? (
-                      <span className="text-xs text-amber-600 italic">Removal pending — awaiting votes</span>
-                    ) : (
-                      <LeaveSharedCourse
-                        courseId={course.id}
-                        courseCode={course.code}
-                        programmeName={programmeName}
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })()}
-
-      {pendingRequests.length > 0 && (
-        <div className="space-y-4 rounded-[1.75rem] border border-amber-200 bg-amber-50/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
-          <h3 className="text-lg font-semibold text-amber-800">Pending Requests</h3>
-          <p className="text-sm text-amber-700">
-            These requests need approval from your programme-mates at the same level.
-          </p>
-          <ul className="space-y-3">
-            {pendingRequests.map((req) => (
-              <li
-                key={req.id}
-                className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-mono text-sm font-medium text-gray-900">
-                    {req.action_type === "join" ? "Join" : "Remove"} {req.course.code}
-                  </p>
-                  <p className="text-sm text-gray-600">{req.course.title}</p>
-                  <p className="text-xs text-gray-400">
-                    Requested by {req.requester.full_name} · Level {req.course.level}
-                    · {req.voteCounts.approve} approve · {req.voteCounts.reject} reject
-                  </p>
-                </div>
-                {req.userVoted ? (
-                  <span className="text-xs text-gray-500 italic">
-                    You voted {req.userVote === "approve" ? "to approve" : "to reject"}
-                  </span>
-                ) : (
-                  req.requester_id !== profile.id && (
-                    <VoteButtons requestId={req.id} />
-                  )
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {joinable.length > 0 && (
-        <div className="space-y-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
-          <h3 className="text-lg font-semibold text-primary">Shared Courses You Can Join</h3>
-          <p className="text-sm text-gray-500">
-            These shared courses are not yet linked to {programmeName}.
-          </p>
-          <ul className="space-y-3">
-            {joinable.map((course) => (
-              <li
-                key={course.id}
-                className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-mono text-sm font-medium text-gray-900">{course.code}</p>
-                  <p className="text-sm text-gray-600">{course.title}</p>
-                  <p className="text-xs text-gray-400">Level {course.level}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={`/course/${course.id}`}
-                    className="rounded-2xl border border-secondary/30 bg-transparent px-3 py-1.5 text-xs font-medium text-secondary transition-all duration-fast hover:bg-secondary/10 hover:text-primary"
-                  >
-                    View
-                  </Link>
-                  <JoinSharedCourse
-                    courseId={course.id}
-                    courseCode={course.code}
-                    programmeName={programmeName}
-                    variant="inline"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <BrowseTabs
+        courses={data.courses}
+        linkedShared={data.linkedShared}
+        joinable={data.joinable}
+        pendingRequests={data.pendingRequests}
+        pendingJoinCourseIds={data.pendingJoinCourseIds}
+        pendingLeaveCourseIds={data.pendingLeaveCourseIds}
+        linkedSharedIds={data.linkedSharedIds}
+        programmeName={data.programmeName}
+        profileId={data.profileId}
+        search={search}
+      />
     </div>
   );
 }

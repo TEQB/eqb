@@ -26,6 +26,7 @@ export function GroupQrScanner({
     if (!container) return;
 
     let cancelled = false;
+    let scannerStarted = false;
     const readerId = `study-group-qr-reader-${Math.random().toString(36).slice(2, 10)}`;
     const reader = document.createElement("div");
     reader.id = readerId;
@@ -44,17 +45,37 @@ export function GroupQrScanner({
         },
         () => {},
       )
+      .then(() => {
+        scannerStarted = true;
+      })
       .catch((e) => {
-        if (!cancelled) setError(e?.message || "Could not start the camera. Check camera permission.");
+        if (!cancelled) {
+          const msg = e?.message || "Could not start the camera.";
+          if (msg.includes("Permission") || msg.includes("denied") || msg.includes("not allowed")) {
+            setError("Camera permission denied. Please allow camera access or use the invite code instead.");
+          } else {
+            setError(msg);
+          }
+        }
       });
 
     return () => {
       cancelled = true;
-      scanner
-        .stop()
-        .then(() => scanner.clear())
-        .catch(() => {})
-        .finally(() => reader.remove());
+      if (scannerStarted) {
+        setTimeout(() => {
+          try {
+            scanner
+              .stop()
+              .then(() => scanner.clear())
+              .catch(() => {})
+              .finally(() => reader.remove());
+          } catch {
+            reader.remove();
+          }
+        }, 0);
+      } else {
+        reader.remove();
+      }
     };
   }, []);
 
@@ -67,9 +88,15 @@ export function GroupQrScanner({
             <X size={20} />
           </button>
         </div>
-        <div ref={containerRef} className="w-full min-h-[260px] rounded-2xl overflow-hidden bg-gray-100" />
-        {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
-        <p className="text-xs text-gray-500 mt-3">Point your camera at the QR code shown inside a study group.</p>
+        <div ref={containerRef} className="w-full min-h-[260px] rounded-2xl overflow-hidden bg-gray-100">
+          {error && (
+            <div className="flex flex-col items-center justify-center h-[260px] text-center p-4">
+              <p className="text-gray-600 mb-3">{error}</p>
+              <p className="text-xs text-gray-400">Close this dialog and use the invite code field instead.</p>
+            </div>
+          )}
+        </div>
+        {!error && <p className="text-xs text-gray-500 mt-3">Point your camera at the QR code shown inside a study group.</p>}
       </div>
     </div>
   );

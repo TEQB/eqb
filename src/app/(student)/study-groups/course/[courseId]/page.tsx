@@ -22,7 +22,7 @@ interface Course {
   level: number;
 }
 
-export default function CourseStudyGroupsPage() {
+function CourseStudyGroupsPageInner() {
   const params = useParams();
   const router = useRouter();
   const courseId = params.courseId as string;
@@ -57,6 +57,17 @@ export default function CourseStudyGroupsPage() {
 
   useEffect(() => {
     load();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`study-groups-course-${courseId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "study_groups" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "study_group_members" }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [courseId]);
 
   const canCreate = groups.length < 2;
@@ -246,4 +257,18 @@ export default function CourseStudyGroupsPage() {
       )}
     </div>
   );
+}
+
+export default function CourseStudyGroupsPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="p-4">Loading...</div>;
+  }
+
+  return <CourseStudyGroupsPageInner />;
 }

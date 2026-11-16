@@ -10,7 +10,7 @@ interface Course {
   code: string;
   title: string;
   level: number;
-  scope: "departmental" | "shared" | "general";
+  scope: "departmental" | "shared" | "general" | string;
   questionCount?: number;
   solutionCount?: number;
 }

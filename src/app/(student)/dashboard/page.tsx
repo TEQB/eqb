@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Download, Smartphone } from "lucide-react";
 import { CourseGrid } from "@/components/browse/CourseGrid";
 import { LevelTabs } from "@/components/browse/LevelTabs";
+import { RealtimeSync } from "@/components/RealtimeSync";
 import {
   loadPublishedQuestionCounts,
   loadStudentFeedbackCount,
@@ -59,6 +60,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
+      <RealtimeSync tables={["past_questions", "study_groups", "study_group_members", "announcements", "notifications"]} />
       <div className="animate-fade-in-down flex flex-col gap-4 rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-primary">Dashboard</h2>

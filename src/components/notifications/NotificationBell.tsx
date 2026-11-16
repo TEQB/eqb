@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toaster";
+import { createClient } from "@/lib/supabase/client";
 
 type Notification = {
   id: string;
@@ -62,8 +63,21 @@ export function NotificationBell({ light, onCountChange }: Props) {
   useEffect(() => {
     fetchCount();
     const interval = setInterval(fetchCount, 30000);
-    return () => clearInterval(interval);
-  }, [fetchCount]);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("notifications")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
+        fetchCount();
+        if (open) fetchNotifications();
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCount, open, fetchNotifications]);
 
   useEffect(() => {
     if (open) {
