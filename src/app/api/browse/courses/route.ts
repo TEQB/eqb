@@ -1,27 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthProfile } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
-import { loadCoursesForProgramme } from "@/lib/student-data";
-import { validateUUID } from "@/lib/utils";
-
-export const revalidate = 300;
+import { loadStudentCourseGroups, loadPublishedQuestionCounts } from "@/lib/student-data";
 
 export async function GET(req: NextRequest) {
+  const profile = await getAuthProfile(req);
+  if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (profile.role !== "student") return NextResponse.json({ error: "Students only" }, { status: 403 });
+
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const programmeId = req.nextUrl.searchParams.get("programme_id");
-  if (!programmeId || !validateUUID(programmeId)) {
-    return NextResponse.json({ error: "A valid programme_id is required" }, { status: 400 });
+
+  if (!programmeId) {
+    return NextResponse.json({ error: "programme_id required" }, { status: 400 });
   }
 
-  const service = createServiceClient();
-  const courses = await loadCoursesForProgramme(service, programmeId);
+  try {
+    const courseGroups = await loadStudentCourseGroups(supabase, programmeId);
+    const questionCounts = await loadPublishedQuestionCounts(
+      supabase,
+      courseGroups.allCourses.map((c) => c.id),
+    );
 
-  return NextResponse.json({
-    courses: courses.map(({ id, code, title, level }) => ({ id, code, title, level })),
-  });
+    const courses = courseGroups.allCourses.map((c) => ({
+      ...c,
+      questionCount: questionCounts[c.id] || 0,
+    }));
+
+    return NextResponse.json({ courses });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

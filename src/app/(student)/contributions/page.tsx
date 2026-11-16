@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
+import { RealtimeSync } from "@/components/RealtimeSync";
 
 const STATUS_BADGE: Record<string, string> = {
   published: "bg-green-100 text-green-800",
@@ -54,9 +55,10 @@ export default async function ContributionsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="animate-fade-in-down rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
-        <h2 className="text-xl font-semibold text-primary">My Contributions</h2>
-        <p className="mt-1 text-sm text-gray-500">
+      <RealtimeSync tables={["past_questions", "solutions", "courses"]} />
+      <div className="animate-fade-in-down rounded-[1.75rem] border border-white/70 bg-white/70 p-4 sm:p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
+        <h2 className="text-lg font-semibold text-primary sm:text-xl">My Contributions</h2>
+        <p className="mt-1 text-xs text-gray-500 sm:text-sm">
           {rawUploads.length} question{rawUploads.length !== 1 ? "s" : ""} uploaded &middot; {rawSolutions.length} solution{rawSolutions.length !== 1 ? "s" : ""} submitted
         </p>
       </div>
@@ -73,40 +75,71 @@ export default async function ContributionsPage() {
             </Link>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Course</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Session</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {rawUploads.map((q) => (
-                  <tr key={q.id} className="transition-colors hover:bg-gray-50/50">
-                    <td className="px-4 py-3">
-                      <Link href={`/question/${q.id}`} className="font-medium text-primary hover:underline">
+          <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 md:hidden">
+              {rawUploads.map((q) => (
+                <Link
+                  key={q.id}
+                  href={`/question/${q.id}`}
+                  className="block rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-primary truncate">
                         {q.course?.code ?? "—"} &middot; {q.course?.title ?? "Unknown"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {q.year}/{Number(q.year) + 1} &middot; {q.semester}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[q.status] ?? "bg-gray-100 text-gray-700"}`}>
-                        {q.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {q.created_at ? format(new Date(q.created_at), "dd MMM yyyy") : "—"}
-                    </td>
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {q.year}/{Number(q.year) + 1} &middot; {q.semester}
+                      </p>
+                    </div>
+                    <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[q.status] ?? "bg-gray-100 text-gray-700"}`}>
+                      {q.status}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    {q.created_at ? format(new Date(q.created_at), "dd MMM yyyy") : "—"}
+                  </p>
+                </Link>
+              ))}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Course</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Session</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rawUploads.map((q) => (
+                    <tr key={q.id} className="transition-colors hover:bg-gray-50/50">
+                      <td className="px-4 py-3">
+                        <Link href={`/question/${q.id}`} className="font-medium text-primary hover:underline">
+                          {q.course?.code ?? "—"} &middot; {q.course?.title ?? "Unknown"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {q.year}/{Number(q.year) + 1} &middot; {q.semester}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[q.status] ?? "bg-gray-100 text-gray-700"}`}>
+                          {q.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {q.created_at ? format(new Date(q.created_at), "dd MMM yyyy") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
@@ -119,43 +152,81 @@ export default async function ContributionsPage() {
             <p className="text-gray-500">You haven&apos;t submitted any solutions yet.</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Question</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Session</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Votes</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {rawSolutions.map((s) => (
-                  <tr key={s.id} className="transition-colors hover:bg-gray-50/50">
-                    <td className="px-4 py-3">
-                      <Link href={`/question/${s.question_id}`} className="font-medium text-primary hover:underline">
+          <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 md:hidden">
+              {rawSolutions.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/question/${s.question_id}`}
+                  className="block rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-primary truncate">
                         {s.question?.course?.code ?? "—"} &middot; {s.question?.course?.title ?? "Unknown"}
-                      </Link>
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {s.question?.year ?? "—"}/{s.question ? Number(s.question.year) + 1 : "—"} &middot; {s.question?.semester ?? "—"}
+                      </p>
                       {s.body && (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{s.body}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-gray-500">{s.body}</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {s.question?.year ?? "—"}/{s.question ? Number(s.question.year) + 1 : "—"} &middot; {s.question?.semester ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-green-600">+{s.upvotes}</span>
-                      <span className="mx-1 text-gray-300">/</span>
-                      <span className="text-red-600">-{s.downvotes}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                      {s.created_at ? format(new Date(s.created_at), "dd MMM yyyy") : "—"}
-                    </td>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs">
+                        <span className="text-green-600">+{s.upvotes}</span>
+                        <span className="mx-1 text-gray-300">/</span>
+                        <span className="text-red-600">-{s.downvotes}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    {s.created_at ? format(new Date(s.created_at), "dd MMM yyyy") : "—"}
+                  </p>
+                </Link>
+              ))}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Question</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Session</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Votes</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rawSolutions.map((s) => (
+                    <tr key={s.id} className="transition-colors hover:bg-gray-50/50">
+                      <td className="px-4 py-3">
+                        <Link href={`/question/${s.question_id}`} className="font-medium text-primary hover:underline">
+                          {s.question?.course?.code ?? "—"} &middot; {s.question?.course?.title ?? "Unknown"}
+                        </Link>
+                        {s.body && (
+                          <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{s.body}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {s.question?.year ?? "—"}/{s.question ? Number(s.question.year) + 1 : "—"} &middot; {s.question?.semester ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-green-600">+{s.upvotes}</span>
+                        <span className="mx-1 text-gray-300">/</span>
+                        <span className="text-red-600">-{s.downvotes}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {s.created_at ? format(new Date(s.created_at), "dd MMM yyyy") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </div>

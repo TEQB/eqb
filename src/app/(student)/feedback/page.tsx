@@ -5,6 +5,7 @@ import {
   loadStudentFeedbackMessages,
   loadStudentProfile,
 } from "@/lib/student-data";
+import { RealtimeSync } from "@/components/RealtimeSync";
 
 export default async function FeedbackPage() {
   const supabase = createClient();
@@ -21,6 +22,7 @@ export default async function FeedbackPage() {
 
   return (
     <div className="space-y-8">
+      <RealtimeSync tables={["feedback_messages", "feedback_replies"]} />
       <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
         <h2 className="text-xl font-semibold text-primary">Feedback</h2>
         <p className="mt-1 text-sm text-gray-500">

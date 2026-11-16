@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LoadMoreQuestions } from "@/components/question/LoadMoreQuestions";
 import { QuestionFilters } from "@/components/question/QuestionFilters";
 import { LeaveSharedCourse } from "@/components/courses/LeaveSharedCourse";
+import { RealtimeSync } from "@/components/RealtimeSync";
 
 export default async function CoursePage({
   params,
@@ -90,6 +91,7 @@ export default async function CoursePage({
 
   return (
     <div className="space-y-6">
+      <RealtimeSync tables={["past_questions", "solutions", "study_groups", "study_group_members"]} />
       <div className="animate-fade-in-down">
         <p className="truncate text-xs text-gray-500 sm:text-sm">
           <Link href="/dashboard" className="transition-colors hover:text-secondary">

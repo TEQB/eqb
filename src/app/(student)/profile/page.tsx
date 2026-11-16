@@ -7,6 +7,7 @@ import {
 import { formatSession } from "@/lib/utils";
 import { ChangeLevelForm } from "@/components/profile/ChangeLevelForm";
 import { DetailsReminderBanner } from "@/components/profile/DetailsReminderBanner";
+import { RealtimeSync } from "@/components/RealtimeSync";
 
 export default async function ProfilePage() {
   const supabase = createClient();
@@ -56,6 +57,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="space-y-8">
+      <RealtimeSync tables={["profiles", "past_questions", "platform_settings"]} />
       <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5 shadow-[0_18px_45px_rgba(63,39,50,0.08)] backdrop-blur-xl">
         <h2 className="text-xl font-semibold text-primary">Profile</h2>
       </div>

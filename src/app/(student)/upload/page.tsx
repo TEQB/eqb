@@ -7,6 +7,7 @@ import {
   loadStudentProfile,
 } from "@/lib/student-data";
 import { LockedBanner } from "@/components/upload/LockedBanner";
+import { RealtimeSync } from "@/components/RealtimeSync";
 
 const UploadForm = dynamic(() => import("@/components/upload/UploadForm"), { ssr: false });
 
@@ -45,6 +46,7 @@ export default async function UploadPage({
 
   return (
     <div className="space-y-6">
+      <RealtimeSync tables={["courses", "programme_courses", "shared_course_requests"]} />
       <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-5">
         <h2 className="text-xl font-semibold text-primary">Upload Past Question</h2>
       </div>

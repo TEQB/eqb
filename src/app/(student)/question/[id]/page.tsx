@@ -80,8 +80,9 @@ export default function QuestionPage({
   const [showSolutionsModal, setShowSolutionsModal] = useState(false);
 
   useEffect(() => {
+    const supabase = createClient();
+
     const loadData = async () => {
-      const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -157,6 +158,17 @@ export default function QuestionPage({
       }
     };
     loadData();
+
+    const channel = supabase
+      .channel(`question-${params.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "past_questions", filter: `id=eq.${params.id}` }, () => loadData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "solutions", filter: `question_id=eq.${params.id}` }, () => loadData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "past_question_pages", filter: `question_id=eq.${params.id}` }, () => loadData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [params.id]);
 
   if (loading) {
