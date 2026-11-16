@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createNotification } from "@/lib/notifications";
 import { logger } from "@/lib/logger";
+import { getAuthProfile } from "@/lib/apiAuth";
 
 const uuidSchema = z.string().uuid();
 
@@ -34,26 +34,27 @@ export async function POST(
     }
     const courseId = parsedId.data;
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const authProfile = await getAuthProfile(_req as any);
+    if (!authProfile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: rawProfile } = await supabase
-      .from("profiles")
-      .select("id, programme_id, role, full_name, programme:programme_id(name)")
-      .eq("auth_user_id", user.id)
+    const service0 = createServiceClient();
+    const { data: progData } = await service0
+      .from("programmes")
+      .select("name")
+      .eq("id", authProfile.programme_id)
       .single();
-    const profile = rawProfile as unknown as {
-      id: string;
-      programme_id: string;
-      role: string;
-      full_name: string;
-      programme: { name: string } | null;
-    } | null;
 
-    if (!profile?.programme_id) {
+    const profile = {
+      id: authProfile.id,
+      programme_id: authProfile.programme_id,
+      role: authProfile.role,
+      full_name: authProfile.full_name,
+      programme: progData as { name: string } | null,
+    };
+
+    if (!profile.programme_id) {
       return NextResponse.json({ error: "Your profile does not have a programme assigned" }, { status: 400 });
     }
     if (profile.role !== "student") {
@@ -128,7 +129,7 @@ export async function POST(
       logger.error({
         event: "courses.request_join_failed",
         message: "Failed to create join request",
-        userId: user.id,
+        userId: authProfile.auth_user_id,
         metadata: { courseId, error: insertError?.message },
       });
       return NextResponse.json({ error: insertError?.message || "Failed to create request" }, { status: 500 });
@@ -160,7 +161,7 @@ export async function POST(
     logger.info({
       event: "courses.request_join",
       message: "Student requested to join shared course",
-      userId: user.id,
+      userId: authProfile.auth_user_id,
       metadata: { courseId, requestId: insertResult.id, programmeId: profile.programme_id, voterCount: eligibleVoters.length },
     });
     return NextResponse.json({ success: true, message: "request_created", requestId: insertResult.id });
@@ -182,26 +183,27 @@ export async function DELETE(
     }
     const courseId = parsedId.data;
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const authProfile = await getAuthProfile(_req as any);
+    if (!authProfile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: rawProfile } = await supabase
-      .from("profiles")
-      .select("id, programme_id, role, full_name, programme:programme_id(name)")
-      .eq("auth_user_id", user.id)
+    const service0 = createServiceClient();
+    const { data: progData } = await service0
+      .from("programmes")
+      .select("name")
+      .eq("id", authProfile.programme_id)
       .single();
-    const profile = rawProfile as unknown as {
-      id: string;
-      programme_id: string;
-      role: string;
-      full_name: string;
-      programme: { name: string } | null;
-    } | null;
 
-    if (!profile?.programme_id) {
+    const profile = {
+      id: authProfile.id,
+      programme_id: authProfile.programme_id,
+      role: authProfile.role,
+      full_name: authProfile.full_name,
+      programme: progData as { name: string } | null,
+    };
+
+    if (!profile.programme_id) {
       return NextResponse.json({ error: "No programme assigned to your profile" }, { status: 400 });
     }
     if (profile.role !== "student") {
@@ -275,7 +277,7 @@ export async function DELETE(
       logger.error({
         event: "courses.request_leave_failed",
         message: "Failed to create leave request",
-        userId: user.id,
+        userId: authProfile.auth_user_id,
         metadata: { courseId, error: insertError?.message },
       });
       return NextResponse.json({ error: insertError?.message || "Failed to create request" }, { status: 500 });
@@ -307,7 +309,7 @@ export async function DELETE(
     logger.info({
       event: "courses.request_leave",
       message: "Student requested to leave shared course",
-      userId: user.id,
+      userId: authProfile.auth_user_id,
       metadata: { courseId, requestId: insertResult.id, programmeId: profile.programme_id, voterCount: eligibleVoters.length },
     });
     return NextResponse.json({ success: true, message: "request_created", requestId: insertResult.id });
