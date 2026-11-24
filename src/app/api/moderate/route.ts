@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateFile, checkDbRateLimit } from "@/lib/utils";
 import { moderateSchema } from "@/lib/validations";
@@ -7,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { moderateWithFailover } from "@/lib/moderation-providers";
 import { notifyAdmins, createNotification, notifyCourseStudents } from "@/lib/notifications";
 import { compressExamImage } from "@/lib/image-compression";
+import { getAuthProfile } from "@/lib/apiAuth";
 
 const RATE_LIMIT = 3;
 const RATE_WINDOW_MS = 60_000;
@@ -14,16 +14,13 @@ const RATE_WINDOW_MS = 60_000;
 export async function POST(req: Request) {
   const start = Date.now();
   try {
-    const supabase = createClient();
     const service = createServiceClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const authProfile = await getAuthProfile(req as any);
+    if (!authProfile) {
       logger.warn({ event: "moderate.unauthorized", message: "Unauthorized moderate attempt", ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown" });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const user = { id: authProfile.auth_user_id };
 
     if (!(await checkDbRateLimit(`moderate:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS))) {
       logger.warn({ event: "moderate.rate_limited", message: "Moderate rate limit hit", userId: user.id });

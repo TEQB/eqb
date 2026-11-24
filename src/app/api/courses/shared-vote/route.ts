@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createNotification } from "@/lib/notifications";
 import { logger } from "@/lib/logger";
+import { getAuthProfile } from "@/lib/apiAuth";
 
 const voteSchema = z.object({
   requestId: z.string().uuid(),
@@ -26,28 +26,19 @@ export async function POST(req: NextRequest) {
 
     const { requestId, vote } = parsed.data;
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const authProfile = await getAuthProfile(req);
+    if (!authProfile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: rawProfile } = await supabase
-      .from("profiles")
-      .select("id, programme_id, role, current_level, full_name")
-      .eq("auth_user_id", user.id)
-      .single();
-    const profile = rawProfile as unknown as {
-      id: string;
-      programme_id: string;
-      role: string;
-      current_level: number;
-      full_name: string;
-    } | null;
+    const profile = {
+      id: authProfile.id,
+      programme_id: authProfile.programme_id,
+      role: authProfile.role,
+      current_level: authProfile.current_level,
+      full_name: authProfile.full_name,
+    };
 
-    if (!profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
     if (profile.role !== "student") {
       return NextResponse.json({ error: "Only students can vote" }, { status: 403 });
     }
@@ -113,7 +104,7 @@ export async function POST(req: NextRequest) {
       logger.error({
         event: "courses.vote_failed",
         message: "Failed to record vote",
-        userId: user.id,
+        userId: authProfile.auth_user_id,
         metadata: { requestId, error: voteInsertError.message },
       });
       return NextResponse.json({ error: voteInsertError.message }, { status: 500 });
@@ -147,7 +138,7 @@ export async function POST(req: NextRequest) {
           logger.error({
             event: "courses.vote_resolve_link_failed",
             message: "Failed to link course after approval",
-            userId: user.id,
+            userId: authProfile.auth_user_id,
             metadata: { requestId, error: linkError.message },
           });
         }
@@ -162,7 +153,7 @@ export async function POST(req: NextRequest) {
           logger.error({
             event: "courses.vote_resolve_unlink_failed",
             message: "Failed to unlink course after approval",
-            userId: user.id,
+            userId: authProfile.auth_user_id,
             metadata: { requestId, error: unlinkError.message },
           });
         }
@@ -213,7 +204,7 @@ export async function POST(req: NextRequest) {
       logger.info({
         event: "courses.vote_resolved",
         message: outcomeMessage,
-        userId: user.id,
+        userId: authProfile.auth_user_id,
         metadata: { requestId, status: newStatus, approveCount, rejectCount },
       });
     }

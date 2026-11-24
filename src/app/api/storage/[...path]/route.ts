@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 import { applyWatermark } from "@/lib/watermark";
 
 export async function GET(
@@ -30,11 +32,35 @@ export async function GET(
   const bucket = decoded.startsWith("solutions/") ? "solutions" : "approved";
 
   if (bucket === "solutions") {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    // Try cookie auth (web) first
+    let userId: string | null = null;
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      userId = data.user?.id ?? null;
+    } catch {
+      userId = null;
+    }
+
+    // Fall back to Bearer token (mobile)
+    if (!userId) {
+      const authHeader = req.headers.get("authorization");
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (token) {
+        try {
+          const anon = createSupabaseJsClient<Database>(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          );
+          const { data } = await anon.auth.getUser(token);
+          userId = data.user?.id ?? null;
+        } catch {
+          userId = null;
+        }
+      }
+    }
+
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }

@@ -104,7 +104,7 @@ export async function POST(req: Request) {
       await service.from("pending_registrations").upsert({
         email,
         full_name: fullName,
-        matric_number: matricNumber || null,
+        matric_number: matricNumber?.trim().toUpperCase() || null,
         programme_id: programmeId,
         current_level: currentLevel,
       });

@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import QRCode from "qrcode";
 import {
   ChevronLeft, Send, QrCode, LogOut, Shield, X, UserX, User, Image as ImageIcon, Reply,
+  Users, Smile,
 } from "lucide-react";
+import { ImageViewer } from "@/components/ImageViewer";
 
 interface Message {
   id: string;
@@ -83,7 +85,14 @@ function StudyGroupChatPageInner() {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Array<{ profile_id: string; full_name: string | null; matric_number: string | null }>>([]);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionOpen, setMentionOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const myMembership = members.find((m) => m.is_me);
   const myProfileId = myMembership?.profile_id ?? null;
@@ -114,6 +123,49 @@ function StudyGroupChatPageInner() {
     if (msg.type === "image") return "Photo";
     return msg.content ?? "";
   }, []);
+
+  // Extract @mentions from message content
+  const extractMentions = useCallback((content: string | null) => {
+    if (!content) return [];
+    const mentionRegex = /@([a-zA-Z0-9_-]+)/g;
+    const matches = content.match(mentionRegex) || [];
+    return matches.map((m) => m.slice(1)); // Remove @
+  }, []);
+
+  // Check if a message mentions current user
+  const isMentioned = useCallback((content: string | null) => {
+    if (!content || !myProfileId) return false;
+    const mentions = extractMentions(content);
+    return mentions.some((mention) => {
+      const member = members.find((m) =>
+        m.matric_number?.toLowerCase() === mention.toLowerCase() ||
+        m.full_name?.toLowerCase().includes(mention.toLowerCase())
+      );
+      return member?.profile_id === myProfileId;
+    });
+  }, [members, myProfileId, extractMentions]);
+
+  // Get delivery status for message
+  const getDeliveryStatus = useCallback((msg: any) => {
+    if (msg.sender_id !== myProfileId) return null;
+    const readBy = (msg.read_by || []) as Array<{ profile_id: string; read_at: string }>;
+    const totalMembers = members.length;
+    const readCount = readBy.length;
+    
+    if (readCount >= totalMembers - 1) return "read";
+    if (readCount > 0) return "delivered";
+    return "sent";
+  }, [myProfileId, members]);
+
+  // Filter messages by search query
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter((m) =>
+      m.content?.toLowerCase().includes(q) ||
+      senderLabel(m.sender_id).toLowerCase().includes(q)
+    );
+  }, [messages, searchQuery, senderLabel]);
 
   const loadDetail = async () => {
     const res = await fetch(`/api/study-groups/${id}`);
@@ -163,6 +215,28 @@ function StudyGroupChatPageInner() {
           loadDetail();
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "study_group_typing", filter: `group_id=eq.${id}` },
+        () => {
+          // Refresh typing indicators
+          fetch(`/api/study-groups/${id}/typing`)
+            .then((res) => res.json())
+            .then((data) => setTypingUsers(data.typing_users || []))
+            .catch(() => {});
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "study_group_message_reactions", filter: `group_id=eq.${id}` },
+        () => {
+          // Reload messages to get updated reactions
+          fetch(`/api/study-groups/${id}/messages`)
+            .then((res) => res.json())
+            .then((data) => setMessages(data.messages || []))
+            .catch(() => {});
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -173,6 +247,43 @@ function StudyGroupChatPageInner() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, tab]);
 
+  // Typing indicator
+  const handleTyping = () => {
+    if (!myProfileId) return;
+    fetch(`/api/study-groups/${id}/typing`, { method: "POST" }).catch(() => {});
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      fetch(`/api/study-groups/${id}/typing`, { method: "DELETE" }).catch(() => {});
+    }, 3000);
+  };
+
+  // Mark message as read
+  const markAsRead = async (messageId: string) => {
+    if (!myProfileId) return;
+    fetch(`/api/study-groups/${id}/messages/${messageId}/read`, { method: "POST" }).catch(() => {});
+  };
+
+  // Add/remove reaction
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    if (!myProfileId) return;
+    try {
+      const res = await fetch(`/api/study-groups/${id}/messages/${messageId}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Reload messages to get updated reactions
+        const msgRes = await fetch(`/api/study-groups/${id}/messages`);
+        const msgData = await msgRes.json();
+        setMessages(msgData.messages || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !myProfileId || sending) return;
@@ -180,6 +291,9 @@ function StudyGroupChatPageInner() {
     setInput("");
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
+    // Clear typing indicator
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    fetch(`/api/study-groups/${id}/typing`, { method: "DELETE" }).catch(() => {});
     try {
       const res = await fetch(`/api/study-groups/${id}/messages`, {
         method: "POST",
@@ -277,10 +391,17 @@ function StudyGroupChatPageInner() {
     if (!replied) {
       return <p className={`text-[11px] italic mb-1 ${mine ? "text-white/60" : "text-gray-500"}`}>Original message</p>;
     }
+    // Check if this is a nested reply (reply to a reply)
+    const nestedReply = replied.reply_to_id ? messageMap.get(replied.reply_to_id) : null;
     return (
-      <div className={`rounded-lg px-2 py-1 mb-1 text-[11px] ${mine ? "bg-white/20" : "bg-black/5"}`}>
+      <div className={`rounded-lg px-2 py-1 mb-1 text-[11px] ${mine ? "bg-white/20" : "bg-black/5"} ${nestedReply ? "border-l-2 border-gray-300" : ""}`}>
         <p className={`font-semibold ${mine ? "text-white" : "text-[#7A1030]"}`}>{senderLabel(replied.sender_id)}</p>
         <p className={`truncate ${mine ? "text-white/80" : "text-gray-600"}`}>{messagePreview(replied)}</p>
+        {nestedReply && (
+          <p className={`text-[10px] ${mine ? "text-white/50" : "text-gray-400"}`}>
+            Reply to {senderLabel(nestedReply.sender_id)}
+          </p>
+        )}
       </div>
     );
   };
@@ -304,6 +425,9 @@ function StudyGroupChatPageInner() {
               </p>
             )}
           </div>
+          <button onClick={() => setSearchOpen(!searchOpen)} className="p-2 text-[#7A1030] hover:bg-[#7A1030]/10 rounded-lg">
+            <Users size={20} />
+          </button>
           <button onClick={openQr} className="p-2 text-[#7A1030] hover:bg-[#7A1030]/10 rounded-lg">
             <QrCode size={20} />
           </button>
@@ -328,11 +452,42 @@ function StudyGroupChatPageInner() {
       {tab === "chat" ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col" style={{ height: "calc(100dvh - 300px)", minHeight: 420 }}>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.length === 0 ? (
+            {/* Search bar */}
+            {searchOpen && (
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#7A1030]"
+                />
+              </div>
+            )}
+
+            {typingUsers.length > 0 && (
+              <div className="text-xs text-gray-500 mb-2">
+                {typingUsers.map((u, i) => (
+                  <span key={u.profile_id}>
+                    {i > 0 && ", "}
+                    {u.full_name || u.matric_number || "Someone"} is typing...
+                  </span>
+                ))}
+              </div>
+            )}
+            {filteredMessages.length === 0 ? (
               <p className="text-center text-gray-500 mt-10">No messages yet. Start the conversation!</p>
             ) : (
-              messages.map((msg) => {
+              filteredMessages.map((msg) => {
                 const mine = msg.sender_id === myProfileId;
+                const readBy = (msg as any).read_by || [];
+                const reactions = (msg as any).reactions || [];
+                const reactionCounts = reactions.reduce((acc: Record<string, number>, r: any) => {
+                  acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                  return acc;
+                }, {});
+                const mentioned = isMentioned(msg.content);
+                const deliveryStatus = getDeliveryStatus(msg);
                 return (
                   <div
                     key={msg.id}
@@ -341,6 +496,9 @@ function StudyGroupChatPageInner() {
                   >
                     {!mine && (
                       <span className="text-xs text-gray-500 mb-0.5 ml-1 self-start">{senderLabel(msg.sender_id)}</span>
+                    )}
+                    {mentioned && (
+                      <span className="text-xs text-[#7A1030] font-semibold mb-0.5 ml-1 self-start">@mentioned</span>
                     )}
                     <div className="relative">
                       <div
@@ -352,23 +510,73 @@ function StudyGroupChatPageInner() {
                         {msg.type === "image" && msg.media_url ? (
                           <ChatImage path={msg.media_url} onClick={() => openImageViewer(msg.media_url!)} />
                         ) : (
-                          msg.content
+                          <span className="whitespace-pre-wrap">
+                            {msg.content?.split(/(@\w+)/g).map((part, i) =>
+                              part.startsWith("@") ? (
+                                <span key={i} className={`font-semibold ${mine ? "text-white" : "text-[#7A1030]"}`}>
+                                  {part}
+                                </span>
+                              ) : (
+                                part
+                              )
+                            )}
+                          </span>
                         )}
                         {msg.type === "image" && msg.content && (
                           <p className={`text-xs mt-1 ${mine ? "text-white/80" : "text-gray-500"}`}>{msg.content}</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => setReplyTo(msg)}
-                        className={`absolute -top-2 ${mine ? "-left-2" : "-right-2"} opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-[#7A1030] shadow-sm transition-opacity`}
-                        title="Reply"
-                      >
-                        <Reply size={12} />
-                      </button>
+                      <div className="flex items-center gap-1 mt-1">
+                        <button
+                          onClick={() => setReplyTo(msg)}
+                          className={`opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-[#7A1030] shadow-sm transition-opacity`}
+                          title="Reply"
+                        >
+                          <Reply size={12} />
+                        </button>
+                        <button
+                          onClick={() => setReactionPickerOpen(reactionPickerOpen === msg.id ? null : msg.id)}
+                          className={`opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-[#7A1030] shadow-sm transition-opacity`}
+                          title="React"
+                        >
+                          <Smile size={12} />
+                        </button>
+                        {Object.keys(reactionCounts).length > 0 && (
+                          <div className="flex gap-1">
+                            {Object.entries(reactionCounts).map(([emoji, count]) => (
+                              <button
+                                key={emoji}
+                                onClick={() => toggleReaction(msg.id, emoji)}
+                                className="bg-gray-100 rounded-full px-2 py-0.5 text-xs hover:bg-gray-200"
+                              >
+                                {emoji} {count}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {reactionPickerOpen === msg.id && (
+                        <div className="absolute top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex gap-2 z-10">
+                          {["👍", "❤️", "😂", "😮", "😢", "🔥"].map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => {
+                                toggleReaction(msg.id, emoji);
+                                setReactionPickerOpen(null);
+                              }}
+                              className="text-2xl hover:bg-gray-100 rounded p-1"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <span className="text-[10px] text-gray-400 mt-0.5">
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      {mine ? " · You" : ""}
+                      {mine && deliveryStatus === "sent" && " · Sent"}
+                      {mine && deliveryStatus === "delivered" && " · Delivered"}
+                      {mine && deliveryStatus === "read" && " · Read"}
                     </span>
                   </div>
                 );
@@ -410,7 +618,10 @@ function StudyGroupChatPageInner() {
               className="flex-1 bg-gray-50 rounded-full px-4 py-2.5 text-sm outline-none border border-gray-200 focus:border-[#7A1030]"
               placeholder="Type a message..."
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                handleTyping();
+              }}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
               maxLength={2000}
             />
@@ -519,14 +730,7 @@ function StudyGroupChatPageInner() {
       )}
 
       {/* Image viewer modal */}
-      {viewerUrl && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50" onClick={() => setViewerUrl(null)}>
-          <button className="absolute top-4 right-4 text-white z-10" onClick={() => setViewerUrl(null)}>
-            <X size={28} />
-          </button>
-          <img src={viewerUrl} alt="chat" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+      <ImageViewer visible={!!viewerUrl} url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </div>
   );
 }

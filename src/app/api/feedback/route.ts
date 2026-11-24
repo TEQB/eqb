@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDbRateLimit, sanitizePlainText } from "@/lib/utils";
 import { feedbackSchema } from "@/lib/validations";
@@ -7,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { getAdminRecipientEmails } from "@/lib/admin-recipients";
 import { sendEmail } from "@/lib/mailer";
 import { feedbackTemplate } from "@/lib/email-templates";
+import { getAuthProfile } from "@/lib/apiAuth";
 
 export async function POST(req: Request) {
   const start = Date.now();
@@ -16,14 +16,11 @@ export async function POST(req: Request) {
     "unknown";
 
   try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const authProfile = await getAuthProfile(req as any);
+    if (!authProfile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const user = { id: authProfile.auth_user_id };
 
     const body = await req.json();
     const parsed = feedbackSchema.safeParse(body);

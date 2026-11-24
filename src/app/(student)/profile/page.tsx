@@ -77,7 +77,7 @@ export default async function ProfilePage() {
             <dd className="mt-1 text-sm text-gray-900">{user.email}</dd>
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
-            <dt className="text-xs font-medium uppercase text-gray-500">Matric</dt>
+            <dt className="text-xs font-medium uppercase text-gray-500">Matric / Reg. No.</dt>
             <dd className="mt-1 text-sm text-gray-900">{profile.matric_number || "Not provided yet"}</dd>
           </div>
           <div className="transition-colors hover:bg-secondary/5 -mx-6 -my-4 px-6 py-4 first:rounded-t-[1.5rem] last:rounded-b-[1.5rem]">
