@@ -549,7 +549,7 @@ function StudyGroupChatPageInner() {
                                 onClick={() => toggleReaction(msg.id, emoji)}
                                 className="bg-gray-100 rounded-full px-2 py-0.5 text-xs hover:bg-gray-200"
                               >
-                                {emoji} {count}
+                                {emoji} {count as number}
                               </button>
                             ))}
                           </div>
