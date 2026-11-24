@@ -834,6 +834,155 @@ export type Database = {
           },
         ]
       }
+      user_device_tokens: {
+        Row: {
+          id: string
+          profile_id: string
+          platform: string
+          token: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          platform: string
+          token: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          platform?: string
+          token?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_device_tokens_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_group_typing: {
+        Row: {
+          id: string
+          group_id: string
+          profile_id: string
+          typing_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          profile_id: string
+          typing_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          profile_id?: string
+          typing_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_typing_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_typing_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_group_message_reads: {
+        Row: {
+          id: string
+          message_id: string
+          profile_id: string
+          read_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          profile_id: string
+          read_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          profile_id?: string
+          read_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_message_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "study_group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_message_reads_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_group_message_reactions: {
+        Row: {
+          id: string
+          message_id: string
+          profile_id: string
+          emoji: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          profile_id: string
+          emoji: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          profile_id?: string
+          emoji?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "study_group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_message_reactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
