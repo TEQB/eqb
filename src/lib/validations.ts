@@ -21,7 +21,10 @@ export const registerSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z
       .string()
-      .regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ (e.g. 125/23/1/0056)")
+      .regex(
+        /^(125\/\d{2}\/[12]\/\d{4}|[A-Za-z0-9]{10,20})$/,
+        "Format: 125/XX/Y/ZZZZ or reg number (e.g. 202330898491GA)",
+      )
       .optional(),
   ),
   facultyId: z.string().uuid(),
@@ -98,7 +101,13 @@ export const completePasswordResetSchema = z
 export const sendOtpSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2).max(100).optional(),
-  matricNumber: z.string().regex(/^125\/\d{2}\/[12]\/\d{4}$/, "Format: 125/XX/Y/ZZZZ").optional(),
+  matricNumber: z
+    .string()
+    .regex(
+      /^(125\/\d{2}\/[12]\/\d{4}|[A-Za-z0-9]{10,20})$/,
+      "Format: 125/XX/Y/ZZZZ or reg number (e.g. 202330898491GA)",
+    )
+    .optional(),
   programmeId: z.string().uuid().optional(),
   currentLevel: z.preprocess(
     (v) => (v ? Number(v) : v),

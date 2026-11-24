@@ -180,15 +180,34 @@ export function RegisterForm({ openRegistrationLevels = [] }: { openRegistration
 
       <div className="w-full animate-fade-in-up stagger-3">
         <label className="mb-2 block text-sm font-semibold text-gray-700">
-          Matric number {!isOpenLevel && <span className="text-danger-600">*</span>}
+          {isOpenLevel ? "Reg number" : "Matric number"}{" "}
+          {!isOpenLevel && <span className="text-danger-600">*</span>}
         </label>
-        <Controller
-          control={control}
-          name="matricNumber"
-          render={({ field }) => (
-            <MatricInput value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
-          )}
-        />
+        {isOpenLevel ? (
+          <Controller
+            control={control}
+            name="matricNumber"
+            render={({ field }) => (
+              <Input
+                id="matricNumber"
+                placeholder="e.g. 202330898491GA"
+                className="h-12 rounded-xl uppercase focus-visible:ring-[#7A1030]"
+                autoCapitalize="characters"
+                {...field}
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+              />
+            )}
+          />
+        ) : (
+          <Controller
+            control={control}
+            name="matricNumber"
+            render={({ field }) => (
+              <MatricInput value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
+            )}
+          />
+        )}
         {errors.matricNumber && (
           <p className="mt-1 text-xs text-danger-600 animate-fade-in">{errors.matricNumber.message}</p>
         )}
