@@ -50,7 +50,15 @@ export async function DELETE(
       })
       .eq("id", messageId);
 
-    if (error) throw error;
+    if (error) {
+      logger.error({
+        event: "admin.study_group_message_delete_db_error",
+        message: error.message,
+        userId: profile.id,
+        metadata: { groupId, messageId, code: error.code, details: error.details, hint: error.hint },
+      });
+      return NextResponse.json({ error: `Delete failed: ${error.message}` }, { status: 500 });
+    }
 
     logger.info({
       event: "admin.study_group_message_deleted",
