@@ -36,6 +36,25 @@ interface Message {
   sender?: { full_name: string | null; avatar_url: string | null } | null;
 }
 
+function ChatImage({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase.storage
+      .from("chat-media")
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => {
+        if (!cancelled && data?.signedUrl) setUrl(data.signedUrl);
+      });
+    return () => { cancelled = true; };
+  }, [path]);
+
+  if (!url) return <div className="w-56 h-40 bg-gray-200 rounded-xl animate-pulse" />;
+  return <img src={url} alt="chat" className="max-w-[16rem] rounded-xl object-cover" />;
+}
+
 export default function AdminGroupDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -261,7 +280,7 @@ export default function AdminGroupDetailPage() {
                       {msg.deleted_at ? (
                         <span className="italic text-gray-400">This message was deleted</span>
                       ) : msg.type === "image" && msg.media_url ? (
-                        <img src={msg.media_url} alt="" className="max-w-full rounded-lg" />
+                        <ChatImage path={msg.media_url} />
                       ) : (
                         <span className="whitespace-pre-wrap">{msg.content}</span>
                       )}
