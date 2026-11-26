@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     if (error) throw error;
 
-    const senderIds = [...new Set(((messages ?? []) as any[]).map((m) => m.sender_id))];
+    const senderIds = Array.from(new Set(((messages ?? []) as any[]).map((m) => m.sender_id)));
     const { data: profiles } = senderIds.length
       ? await service.from("profiles").select("id, full_name, avatar_url").in("id", senderIds)
       : { data: [] };

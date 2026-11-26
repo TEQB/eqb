@@ -40,7 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .eq("group_id", groupId)
       .order("joined_at", { ascending: true });
 
-    const profileIds = [...new Set(((members ?? []) as any[]).map((m) => m.profile_id))];
+    const profileIds = Array.from(new Set(((members ?? []) as any[]).map((m) => m.profile_id)));
     const { data: profiles } = profileIds.length
       ? await service.from("profiles").select("id, full_name, matric_number, avatar_url").in("id", profileIds)
       : { data: [] };
