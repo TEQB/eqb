@@ -60,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const senderIds = Array.from(new Set(((messages ?? []) as any[]).map((m) => m.sender_id)));
     const { data: profiles } = senderIds.length
-      ? await service.from("profiles").select("id, full_name, avatar_url").in("id", senderIds)
+      ? await service.from("profiles").select("id, full_name, matric_number").in("id", senderIds)
       : { data: [] };
     const profileMap = new Map(((profiles ?? []) as any[]).map((p) => [p.id, p]));
 
@@ -122,14 +122,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const memberIds = ((members ?? []) as any[]).map((m) => m.profile_id);
     if (memberIds.length > 0) {
       const preview = type === "image" ? "📷 Photo" : content.slice(0, 80);
-      await Promise.all(
-        memberIds.map((pid) =>
+      const senderName = profile.full_name || "EQB Admin";
+      await Promise.all([
+        // In-app notifications (notification bell + realtime)
+        service.from("notifications").insert(
+          memberIds.map((pid: string) => ({
+            user_id: pid,
+            type: "group_message",
+            title: `New message in group`,
+            body: `${senderName}: ${preview}`,
+            link: null,
+            metadata: { groupId },
+          })),
+        ),
+        // Push notifications
+        ...memberIds.map((pid: string) =>
           sendPushNotification(pid, "EQB Admin", preview, {
             type: "group_message",
             groupId,
           }).catch(() => {}),
         ),
-      );
+      ]);
     }
 
     logger.info({

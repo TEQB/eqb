@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const profileIds = Array.from(new Set(((members ?? []) as any[]).map((m) => m.profile_id)));
     const { data: profiles } = profileIds.length
-      ? await service.from("profiles").select("id, full_name, matric_number, avatar_url").in("id", profileIds)
+      ? await service.from("profiles").select("id, full_name, matric_number").in("id", profileIds)
       : { data: [] };
     const profileMap = new Map(((profiles ?? []) as any[]).map((p) => [p.id, p]));
 

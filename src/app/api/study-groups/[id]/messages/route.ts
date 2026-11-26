@@ -236,6 +236,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       const groupName = (groupInfo as any)?.name || "Study Group";
       const messagePreview = type === "image" ? "📷 Photo" : (content?.substring(0, 50) || "Message");
+      const senderName = profile.full_name || profile.matric_number || "A member";
+
+      // In-app notifications (notification bell + realtime)
+      await service.from("notifications").insert(
+        (groupMembers as Array<{ profile_id: string }>).map((m) => ({
+          user_id: m.profile_id,
+          type: "group_message",
+          title: `New message in ${groupName}`,
+          body: `${senderName}: ${messagePreview}`,
+          link: null,
+          metadata: { groupId },
+        })),
+      );
 
       for (const member of groupMembers as Array<{ profile_id: string }>) {
         await sendPushNotification(
