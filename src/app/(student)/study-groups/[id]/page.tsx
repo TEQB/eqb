@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import QRCode from "qrcode";
 import {
   ChevronLeft, Send, QrCode, LogOut, Shield, X, UserX, User, Image as ImageIcon, Reply,
-  Users, Smile,
+  Users, Smile, Trash2,
 } from "lucide-react";
 import { ImageViewer } from "@/components/ImageViewer";
 
@@ -18,6 +18,7 @@ interface Message {
   type: string;
   media_url: string | null;
   reply_to_id: string | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -210,6 +211,14 @@ function StudyGroupChatPageInner() {
       )
       .on(
         "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "study_group_messages", filter: `group_id=eq.${id}` },
+        (payload) => {
+          const msg = payload.new as Message;
+          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+        },
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "study_group_members", filter: `group_id=eq.${id}` },
         () => {
           loadDetail();
@@ -261,6 +270,18 @@ function StudyGroupChatPageInner() {
   const markAsRead = async (messageId: string) => {
     if (!myProfileId) return;
     fetch(`/api/study-groups/${id}/messages/${messageId}/read`, { method: "POST" }).catch(() => {});
+  };
+
+  const handleDeleteMessage = async (msg: Message) => {
+    if (!confirm("Delete this message? It will show \"This message was deleted\" for everyone.")) return;
+    try {
+      const res = await fetch(`/api/study-groups/${id}/messages/${msg.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, deleted_at: new Date().toISOString(), content: null, media_url: null } : m)));
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete message");
+    }
   };
 
   // Add/remove reaction
@@ -506,24 +527,32 @@ function StudyGroupChatPageInner() {
                           mine ? "bg-[#7A1030] text-white rounded-br-sm" : "bg-gray-100 text-gray-900 rounded-bl-sm"
                         }`}
                       >
-                        {msg.reply_to_id && renderReplyQuote(msg, mine)}
-                        {msg.type === "image" && msg.media_url ? (
-                          <ChatImage path={msg.media_url} onClick={() => openImageViewer(msg.media_url!)} />
-                        ) : (
-                          <span className="whitespace-pre-wrap">
-                            {msg.content?.split(/(@\w+)/g).map((part, i) =>
-                              part.startsWith("@") ? (
-                                <span key={i} className={`font-semibold ${mine ? "text-white" : "text-[#7A1030]"}`}>
-                                  {part}
-                                </span>
-                              ) : (
-                                part
-                              )
-                            )}
+                        {(msg as any).deleted_at ? (
+                          <span className={`italic whitespace-pre-wrap ${mine ? "text-white/70" : "text-gray-400"}`}>
+                            This message was deleted
                           </span>
-                        )}
-                        {msg.type === "image" && msg.content && (
-                          <p className={`text-xs mt-1 ${mine ? "text-white/80" : "text-gray-500"}`}>{msg.content}</p>
+                        ) : (
+                          <>
+                            {msg.reply_to_id && renderReplyQuote(msg, mine)}
+                            {msg.type === "image" && msg.media_url ? (
+                              <ChatImage path={msg.media_url} onClick={() => openImageViewer(msg.media_url!)} />
+                            ) : (
+                              <span className="whitespace-pre-wrap">
+                                {msg.content?.split(/(@\w+)/g).map((part, i) =>
+                                  part.startsWith("@") ? (
+                                    <span key={i} className={`font-semibold ${mine ? "text-white" : "text-[#7A1030]"}`}>
+                                      {part}
+                                    </span>
+                                  ) : (
+                                    part
+                                  )
+                                )}
+                              </span>
+                            )}
+                            {msg.type === "image" && msg.content && (
+                              <p className={`text-xs mt-1 ${mine ? "text-white/80" : "text-gray-500"}`}>{msg.content}</p>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="flex items-center gap-1 mt-1">
@@ -534,6 +563,16 @@ function StudyGroupChatPageInner() {
                         >
                           <Reply size={12} />
                         </button>
+                        {mine && !(msg as any).deleted_at && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg)}
+                            className="opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-red-600 shadow-sm transition-opacity"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                        {!(msg as any).deleted_at && (
                         <button
                           onClick={() => setReactionPickerOpen(reactionPickerOpen === msg.id ? null : msg.id)}
                           className={`opacity-0 group-hover:opacity-100 bg-white border border-gray-200 rounded-full p-1 text-gray-400 hover:text-[#7A1030] shadow-sm transition-opacity`}
@@ -541,7 +580,8 @@ function StudyGroupChatPageInner() {
                         >
                           <Smile size={12} />
                         </button>
-                        {Object.keys(reactionCounts).length > 0 && (
+                        )}
+                        {!(msg as any).deleted_at && Object.keys(reactionCounts).length > 0 && (
                           <div className="flex gap-1">
                             {Object.entries(reactionCounts).map(([emoji, count]) => (
                               <button
@@ -555,7 +595,7 @@ function StudyGroupChatPageInner() {
                           </div>
                         )}
                       </div>
-                      {reactionPickerOpen === msg.id && (
+                      {reactionPickerOpen === msg.id && !(msg as any).deleted_at && (
                         <div className="absolute top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex gap-2 z-10">
                           {["👍", "❤️", "😂", "😮", "😢", "🔥"].map((emoji) => (
                             <button

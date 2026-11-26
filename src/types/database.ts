@@ -712,6 +712,7 @@ export type Database = {
           type: string
           media_url: string | null
           reply_to_id: string | null
+          deleted_at: string | null
           created_at: string
         }
         Insert: {
@@ -722,6 +723,7 @@ export type Database = {
           type?: string
           media_url?: string | null
           reply_to_id?: string | null
+          deleted_at?: string | null
           created_at?: string
         }
         Update: {
@@ -732,6 +734,7 @@ export type Database = {
           type?: string
           media_url?: string | null
           reply_to_id?: string | null
+          deleted_at?: string | null
           created_at?: string
         }
         Relationships: [

@@ -12,7 +12,7 @@ const messageSchema = z.object({
   reply_to_id: z.string().uuid().nullable().optional(),
 });
 
-const MESSAGE_SELECT = "id, group_id, sender_id, content, type, media_url, reply_to_id, created_at";
+const MESSAGE_SELECT = "id, group_id, sender_id, content, type, media_url, reply_to_id, deleted_at, created_at";
 
 // Simple in-memory push notification sender (for production, use Firebase Cloud Messaging or OneSignal)
 async function sendPushNotification(profileId: string, title: string, body: string, data?: any) {
