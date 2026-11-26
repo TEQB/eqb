@@ -713,6 +713,9 @@ function StudyGroupChatPageInner() {
                     {m.role === "admin" && (
                       <span className="bg-[#7A1030]/10 text-[#7A1030] text-[10px] font-semibold rounded-full px-2 py-0.5">Admin</span>
                     )}
+                    {m.role === "e-admin" && (
+                      <span className="bg-purple-100 text-purple-700 text-[10px] font-semibold rounded-full px-2 py-0.5">E-Admin</span>
+                    )}
                     {m.is_me && (
                       <span className="bg-orange-100 text-orange-700 text-[10px] font-semibold rounded-full px-2 py-0.5">You</span>
                     )}
@@ -722,7 +725,7 @@ function StudyGroupChatPageInner() {
                     {m.programme_name ?? ""}{m.current_level ? ` · Level ${m.current_level}` : ""}
                   </p>
                 </div>
-                {isAdmin && !m.is_me && (
+                {isAdmin && !m.is_me && m.role !== "e-admin" && (
                   <button onClick={() => handleRemoveMember(m.profile_id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
                     <UserX size={18} />
                   </button>

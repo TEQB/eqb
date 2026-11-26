@@ -135,6 +135,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (parsed.data.member_id === profile.id) {
         return NextResponse.json({ error: "Admins cannot remove themselves" }, { status: 400 });
       }
+      const { data: target } = await service
+        .from("study_group_members")
+        .select("role")
+        .eq("group_id", groupId)
+        .eq("profile_id", parsed.data.member_id)
+        .maybeSingle();
+      if ((target as any)?.role === "e-admin") {
+        return NextResponse.json({ error: "Platform admins cannot be removed" }, { status: 403 });
+      }
       const { error } = await service
         .from("study_group_members")
         .delete()
