@@ -278,6 +278,19 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      case "question-pages": {
+        const questionId = req.nextUrl.searchParams.get("question_id");
+        if (!questionId || !validateUUID(questionId)) {
+          return NextResponse.json({ error: "Valid question_id required" }, { status: 400 });
+        }
+        const { data: pages } = await (service as any)
+          .from("past_question_pages")
+          .select("id, page_number, file_url, file_type")
+          .eq("question_id", questionId)
+          .order("page_number", { ascending: true });
+        return NextResponse.json({ pages: pages ?? [] });
+      }
+
       case "question-filter-options": {
         const { data: rows } = await service
           .from("past_questions")

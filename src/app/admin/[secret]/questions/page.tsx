@@ -59,6 +59,8 @@ export default function AdminQuestionsPage({
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [selectedQuestion, setSelectedQuestion] = useState<{ id: string; code: string } | null>(null);
+  const [reviewQuestion, setReviewQuestion] = useState<Question | null>(null);
+  const [reviewPages, setReviewPages] = useState<{ id: string; page_number: number; file_url: string; file_type: string }[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [editYear, setEditYear] = useState("");
@@ -133,7 +135,7 @@ export default function AdminQuestionsPage({
     fetchQuestions();
   }, [fetchQuestions]);
 
-  async function handleAction(id: string, action: string) {
+  async function handleAction(id: string, action: string): Promise<boolean> {
     setActionMsg(null);
     const formData = new FormData();
     formData.set("id", id);
@@ -147,17 +149,18 @@ export default function AdminQuestionsPage({
       fetch("/api/admin?action=pending-count")
         .then((r) => r.json())
         .then((d) => { if (d.count != null) setPendingCount(d.count); });
-    } else {
-      const data = await res.json();
-      const err = data.error || "Action failed";
-      setError(err);
-      toast.error(err);
+      return true;
     }
+    const data = await res.json();
+    const err = data.error || "Action failed";
+    setError(err);
+    toast.error(err);
+    return false;
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this question?")) return;
-    await handleAction(id, "delete");
+  async function handleDelete(id: string): Promise<boolean> {
+    if (!confirm("Are you sure you want to delete this question?")) return false;
+    return handleAction(id, "delete");
   }
 
   const startItem = (page - 1) * 20 + 1;
@@ -171,6 +174,14 @@ export default function AdminQuestionsPage({
       default: return "bg-gray-100 text-gray-700";
     }
   };
+
+  useEffect(() => {
+    if (!reviewQuestion) { setReviewPages([]); return; }
+    fetch(`/api/admin?action=question-pages&question_id=${reviewQuestion.id}`)
+      .then((r) => r.json())
+      .then((d) => setReviewPages(d.pages ?? []))
+      .catch(() => setReviewPages([]));
+  }, [reviewQuestion]);
 
   useEffect(() => {
     if (!editingQuestion) return;
@@ -238,10 +249,14 @@ export default function AdminQuestionsPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2">
+          <button
+            onClick={() => { setStatusFilter("pending_review"); setPage(1); }}
+            className="inline-flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2 transition-colors hover:bg-amber-100"
+            title="Show pending questions"
+          >
             <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
             <span className="text-sm font-medium text-amber-800">{pendingCount} pending review</span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -421,6 +436,12 @@ export default function AdminQuestionsPage({
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => setReviewQuestion(q)}
+                        className="rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-100"
+                      >
+                        Review
+                      </button>
                       {q.file_url && (
                         <a
                           href={q.file_url}
@@ -512,6 +533,139 @@ export default function AdminQuestionsPage({
         onDeleted={() => {}}
         onSolutionsChanged={fetchQuestions}
       />
+
+      <Dialog open={reviewQuestion !== null} onOpenChange={(open) => !open && setReviewQuestion(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              Review: {reviewQuestion?.courses?.code || "Question"} — {reviewQuestion?.courses?.title || ""}
+            </DialogTitle>
+          </DialogHeader>
+          {reviewQuestion && (
+            <div className="space-y-4">
+              <div className="grid gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Programme</p>
+                  <p className="text-gray-900">{reviewQuestion.programme_name || reviewQuestion.courses?.programme?.name || "General"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Level</p>
+                  <p className="text-gray-900">{reviewQuestion.courses?.level || reviewQuestion.level || "-"}L</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Session</p>
+                  <p className="text-gray-900">
+                    {formatSession(reviewQuestion.year)} · {reviewQuestion.semester === "second" ? "Second" : "First"} Semester · {reviewQuestion.exam_type === "mid_semester" ? "Mid Semester" : "Examination"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Uploader</p>
+                  <p className="text-gray-900">
+                    {reviewQuestion.profiles?.full_name || "Unknown"}
+                    {reviewQuestion.uploader_email && <span className="text-gray-500"> ({reviewQuestion.uploader_email})</span>}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Uploaded</p>
+                  <p className="text-gray-900">{new Date(reviewQuestion.created_at).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">Status</p>
+                  <p className="text-gray-900">{reviewQuestion.status.replace(/_/g, " ")}{reviewQuestion.flag_count > 0 ? ` · ${reviewQuestion.flag_count} flag${reviewQuestion.flag_count !== 1 ? "s" : ""}` : ""}</p>
+                </div>
+              </div>
+
+              <div className="max-h-[60vh] space-y-3 overflow-y-auto rounded-xl border border-gray-200 bg-gray-100 p-3">
+                {reviewPages.length > 0 ? (
+                  reviewPages.map((page) => (
+                    <div key={page.id} className="overflow-hidden rounded-lg bg-white">
+                      {reviewPages.length > 1 && (
+                        <p className="border-b border-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
+                          Page {page.page_number}
+                        </p>
+                      )}
+                      {page.file_type === "pdf" ? (
+                        <iframe src={`/api/storage/${page.file_url}`} className="h-[55vh] w-full" title={`Page ${page.page_number}`} />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/api/storage/${page.file_url}`} alt={`Page ${page.page_number}`} className="mx-auto max-h-[55vh] w-auto object-contain" />
+                      )}
+                    </div>
+                  ))
+                ) : reviewQuestion.file_url ? (
+                  reviewQuestion.file_type === "pdf" ? (
+                    <iframe src={reviewQuestion.file_url} className="h-[55vh] w-full" title="Question paper" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={reviewQuestion.file_url} alt="Question paper" className="mx-auto max-h-[55vh] w-auto object-contain" />
+                  )
+                ) : (
+                  <div className="flex h-48 flex-col items-center justify-center text-gray-400">
+                    <p className="text-sm">No file attached</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={reviewQuestion.file_url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-primary-600 hover:underline"
+                >
+                  Open in new tab
+                </a>
+                <div className="flex items-center gap-2">
+                  {reviewQuestion.status === "pending_review" && (
+                    <button
+                      onClick={async () => {
+                        if (await handleAction(reviewQuestion.id, "approve")) setReviewQuestion(null);
+                      }}
+                      className="rounded-lg bg-success-600 px-4 py-2 text-sm font-medium text-white hover:bg-success-700"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {reviewQuestion.status === "published" && (
+                    <button
+                      onClick={async () => {
+                        if (await handleAction(reviewQuestion.id, "suspend")) setReviewQuestion(null);
+                      }}
+                      className="rounded-lg bg-warning-500 px-4 py-2 text-sm font-medium text-white hover:bg-warning-600"
+                    >
+                      Suspend
+                    </button>
+                  )}
+                  {reviewQuestion.status === "suspended" && (
+                    <button
+                      onClick={async () => {
+                        if (await handleAction(reviewQuestion.id, "approve")) setReviewQuestion(null);
+                      }}
+                      className="rounded-lg bg-success-600 px-4 py-2 text-sm font-medium text-white hover:bg-success-700"
+                    >
+                      Restore
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      if (await handleDelete(reviewQuestion.id)) setReviewQuestion(null);
+                    }}
+                    className="rounded-lg bg-danger-600 px-4 py-2 text-sm font-medium text-white hover:bg-danger-700"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setReviewQuestion(null)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editingQuestion !== null} onOpenChange={(open) => !open && setEditingQuestion(null)}>
         <DialogContent className="max-w-2xl sm:max-w-none">
