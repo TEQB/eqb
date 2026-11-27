@@ -371,7 +371,7 @@ export async function GET(req: NextRequest) {
       case "list-courses": {
         const { data: courses } = await service
           .from("courses")
-          .select("id, code, title, level, scope, programme_id, programme_courses(programme_id, programmes!inner(id, name))")
+          .select("id, code, title, level, scope, programme_id, created_at, programme_courses(programme_id, programmes!inner(id, name))")
           .order("code");
         return NextResponse.json({ courses: courses ?? [] });
       }

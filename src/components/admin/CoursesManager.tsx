@@ -13,14 +13,22 @@ type Course = {
   level: number;
   scope: string;
   programme_id: string | null;
+  created_at: string | null;
   programme_courses: ProgrammeCourse[];
 };
+
+const PAGE_SIZE = 25;
 
 export function CoursesManager() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterScope, setFilterScope] = useState("all");
+  const [filterLevel, setFilterLevel] = useState("all");
+  const [filterProgramme, setFilterProgramme] = useState("all");
+  const [sortBy, setSortBy] = useState<"code" | "recent">("code");
+  const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ code: "", title: "", level: 0 });
   const [saving, setSaving] = useState(false);
@@ -56,13 +64,38 @@ export function CoursesManager() {
       .then((d) => { if (d) setCourseStats(d); });
   }, []);
 
-  const filtered = useMemo(
-    () => courses.filter((c) =>
-      c.code.toLowerCase().includes(search.toLowerCase()) ||
-      c.title.toLowerCase().includes(search.toLowerCase())
-    ),
-    [courses, search],
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    const list = courses.filter((c) => {
+      if (q && !c.code.toLowerCase().includes(q) && !c.title.toLowerCase().includes(q)) return false;
+      if (filterScope !== "all" && c.scope !== filterScope) return false;
+      if (filterLevel !== "all" && String(c.level) !== filterLevel) return false;
+      if (filterProgramme !== "all") {
+        const linked = c.programme_courses?.some((pc) => pc.programme_id === filterProgramme) ?? false;
+        if (!linked && c.programme_id !== filterProgramme) return false;
+      }
+      return true;
+    });
+    if (sortBy === "recent") {
+      list.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    }
+    return list;
+  }, [courses, search, filterScope, filterLevel, filterProgramme, sortBy]);
+
+  const levels = useMemo(
+    () => Array.from(new Set(courses.map((c) => c.level))).sort((a, b) => a - b),
+    [courses],
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  const hasFilters =
+    search !== "" || filterScope !== "all" || filterLevel !== "all" || filterProgramme !== "all" || sortBy !== "code";
 
   const handleScopeChange = async (courseId: string, scope: string, programmeId?: string, programmeIds?: string[]) => {
     const body: Record<string, unknown> = {
@@ -209,9 +242,11 @@ export function CoursesManager() {
       )}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-5 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-gray-500">
-            {courses.length} course{courses.length !== 1 ? "s" : ""} total
+            {filtered.length === courses.length
+              ? `${courses.length} course${courses.length !== 1 ? "s" : ""} total`
+              : `${filtered.length} of ${courses.length} courses`}
           </p>
           <div className="relative">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -220,11 +255,67 @@ export function CoursesManager() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search courses..."
               className="w-52 rounded-lg border border-gray-300 py-1.5 pl-9 pr-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            value={filterScope}
+            onChange={(e) => { setFilterScope(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="all">All scopes</option>
+            <option value="departmental">Departmental</option>
+            <option value="shared">Shared</option>
+            <option value="general">General</option>
+          </select>
+
+          <select
+            value={filterLevel}
+            onChange={(e) => { setFilterLevel(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="all">All levels</option>
+            {levels.map((lvl) => (
+              <option key={lvl} value={String(lvl)}>Lvl {lvl}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterProgramme}
+            onChange={(e) => { setFilterProgramme(e.target.value); setPage(1); }}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="all">All programmes</option>
+            {programmes.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value as "code" | "recent"); setPage(1); }}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          >
+            <option value="code">Sort: Course code</option>
+            <option value="recent">Recently added</option>
+          </select>
+
+          {hasFilters && (
+            <button
+              onClick={() => {
+                setSearch(""); setFilterScope("all"); setFilterLevel("all");
+                setFilterProgramme("all"); setSortBy("code"); setPage(1);
+              }}
+              className="text-xs font-medium text-primary-600 hover:text-primary-700"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,11 +326,11 @@ export function CoursesManager() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
             </svg>
             <p className="text-sm text-gray-400">
-              {search ? "No matching courses" : "No courses yet"}
+              {hasFilters ? "No courses match your filters" : "No courses yet"}
             </p>
           </div>
         ) : (
-          filtered.map((course, idx) => {
+          paginated.map((course, idx) => {
             const linkedProgrammeIds = new Set(
               course.programme_courses?.map((pc: ProgrammeCourse) => pc.programme_id) ?? []
             );
@@ -255,7 +346,7 @@ export function CoursesManager() {
                     {isEditing ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
+                          <span className="text-xs text-gray-400 font-mono w-6">{(safePage - 1) * PAGE_SIZE + idx + 1}.</span>
                           <input
                             value={editForm.code}
                             onChange={(e) => setEditForm((f) => ({ ...f, code: e.target.value }))}
@@ -297,13 +388,18 @@ export function CoursesManager() {
                     ) : (
                       <>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}.</span>
+                          <span className="text-xs text-gray-400 font-mono w-6">{(safePage - 1) * PAGE_SIZE + idx + 1}.</span>
                           <span className="font-semibold text-gray-900">{course.code}</span>
                           <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
                             Lvl {course.level}
                           </span>
                         </div>
                         <p className="mt-0.5 text-sm text-gray-500">{course.title}</p>
+                        {sortBy === "recent" && course.created_at && (
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            Added {new Date(course.created_at).toLocaleDateString()}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
@@ -526,6 +622,33 @@ export function CoursesManager() {
           })
         )}
       </div>
+
+      {filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between border-t border-gray-200 px-5 py-3">
+          <p className="text-xs text-gray-500">
+            Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-gray-500">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation dialog */}
       {deletingId && (
