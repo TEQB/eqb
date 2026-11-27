@@ -10,18 +10,33 @@ type NotificationInput = {
 };
 
 async function sendPushNotification(profileId: string, title: string, body: string | undefined, data: Record<string, unknown>) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return;
-
   try {
-    await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+    const service = createServiceClient();
+    const { data: tokens } = await service
+      .from("user_device_tokens")
+      .select("platform, token")
+      .eq("profile_id", profileId)
+      .eq("is_active", true);
+
+    const expoTokens = ((tokens ?? []) as any[])
+      .filter((t) => t.platform === "ios" || t.platform === "android")
+      .map((t) => t.token);
+
+    if (expoTokens.length === 0) return;
+
+    await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
+        Accept: "application/json",
       },
-      body: JSON.stringify({ profileId, title, body: body ?? title, data }),
+      body: JSON.stringify({
+        to: expoTokens,
+        title,
+        body: body ?? title,
+        data,
+        sound: "default",
+      }),
     });
   } catch (err) {
     console.error("Failed to send push notification:", err);
