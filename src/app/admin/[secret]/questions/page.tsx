@@ -49,6 +49,11 @@ export default function AdminQuestionsPage({
   const [statusFilter, setStatusFilter] = useState("all");
   const [programmeFilter, setProgrammeFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
+  const [semesterFilter, setSemesterFilter] = useState("");
+  const [examTypeFilter, setExamTypeFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [programmes, setProgrammes] = useState<Programme[]>([]);
@@ -72,6 +77,9 @@ export default function AdminQuestionsPage({
     fetch("/api/admin?action=pending-count")
       .then((r) => r.json())
       .then((d) => { if (d.count != null) setPendingCount(d.count); });
+    fetch("/api/admin?action=question-filter-options")
+      .then((r) => r.json())
+      .then((d) => { if (d.years) setAvailableYears(d.years); });
   }, []);
 
   useEffect(() => {
@@ -84,6 +92,10 @@ export default function AdminQuestionsPage({
   const handleStatusChange = (val: string) => { setStatusFilter(val); setPage(1); };
   const handleProgrammeChange = (val: string) => { setProgrammeFilter(val); setPage(1); };
   const handleLevelChange = (val: string) => { setLevelFilter(val); setPage(1); };
+  const handleYearChange = (val: string) => { setYearFilter(val); setPage(1); };
+  const handleSemesterChange = (val: string) => { setSemesterFilter(val); setPage(1); };
+  const handleExamTypeChange = (val: string) => { setExamTypeFilter(val); setPage(1); };
+  const handleSortChange = (val: string) => { setSortOrder(val as "newest" | "oldest"); setPage(1); };
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
@@ -92,6 +104,10 @@ export default function AdminQuestionsPage({
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (programmeFilter) params.set("programme_id", programmeFilter);
     if (levelFilter) params.set("level", levelFilter);
+    if (yearFilter) params.set("year", yearFilter);
+    if (semesterFilter) params.set("semester", semesterFilter);
+    if (examTypeFilter) params.set("exam_type", examTypeFilter);
+    if (sortOrder === "oldest") params.set("sort", "oldest");
     if (searchQuery) params.set("search", searchQuery);
     try {
       const res = await fetch(`/api/admin?${params}`);
@@ -111,7 +127,7 @@ export default function AdminQuestionsPage({
       toast.error("Failed to load questions");
     }
     setLoading(false);
-  }, [page, statusFilter, programmeFilter, levelFilter, searchQuery]);
+  }, [page, statusFilter, programmeFilter, levelFilter, yearFilter, semesterFilter, examTypeFilter, sortOrder, searchQuery]);
 
   useEffect(() => {
     fetchQuestions();
@@ -261,6 +277,46 @@ export default function AdminQuestionsPage({
           {[100, 200, 300, 400, 500].map((l) => (
             <option key={l} value={l}>{l}L</option>
           ))}
+        </select>
+
+        <select
+          value={yearFilter}
+          onChange={(e) => handleYearChange(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+        >
+          <option value="">All Years</option>
+          {availableYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+
+        <select
+          value={semesterFilter}
+          onChange={(e) => handleSemesterChange(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+        >
+          <option value="">All Semesters</option>
+          <option value="first">First Semester</option>
+          <option value="second">Second Semester</option>
+        </select>
+
+        <select
+          value={examTypeFilter}
+          onChange={(e) => handleExamTypeChange(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+        >
+          <option value="">All Exam Types</option>
+          <option value="examination">Examination</option>
+          <option value="mid_semester">Mid Semester</option>
+        </select>
+
+        <select
+          value={sortOrder}
+          onChange={(e) => handleSortChange(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+        >
+          <option value="newest">Recently added</option>
+          <option value="oldest">Oldest first</option>
         </select>
 
         <div className="relative min-w-[200px] flex-1">

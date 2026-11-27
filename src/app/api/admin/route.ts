@@ -165,6 +165,10 @@ export async function GET(req: NextRequest) {
         const status = req.nextUrl.searchParams.get("status");
         const programmeId = req.nextUrl.searchParams.get("programme_id");
         const level = req.nextUrl.searchParams.get("level");
+        const year = req.nextUrl.searchParams.get("year");
+        const semester = req.nextUrl.searchParams.get("semester");
+        const examType = req.nextUrl.searchParams.get("exam_type");
+        const sort = req.nextUrl.searchParams.get("sort");
         const search = req.nextUrl.searchParams.get("search");
         const page = parseInt(req.nextUrl.searchParams.get("page") || "1");
         const pageSize = 20;
@@ -187,13 +191,22 @@ export async function GET(req: NextRequest) {
         if (level) {
           query = query.eq("courses.level", parseInt(level));
         }
+        if (year) {
+          query = query.eq("year", parseInt(year));
+        }
+        if (semester) {
+          query = query.eq("semester", semester);
+        }
+        if (examType) {
+          query = query.eq("exam_type", examType);
+        }
         if (search) {
           const cleanSearch = search.replace(/[%_]/g, "").slice(0, 100);
           query = query.or(`courses.code.ilike.%${cleanSearch}%,courses.title.ilike.%${cleanSearch}%`);
         }
 
         const { data: rawQuestions, count, error } = await query
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: sort === "oldest" })
           .range(offset, offset + pageSize - 1);
 
         if (error) {
@@ -263,6 +276,17 @@ export async function GET(req: NextRequest) {
           pageSize,
           totalPages: Math.ceil((count ?? 0) / pageSize),
         });
+      }
+
+      case "question-filter-options": {
+        const { data: rows } = await service
+          .from("past_questions")
+          .select("year")
+          .not("year", "is", null);
+        const years = Array.from(
+          new Set((rows ?? []).map((r: { year: number }) => r.year).filter(Boolean)),
+        ).sort((a: number, b: number) => b - a);
+        return NextResponse.json({ years });
       }
 
       case "students": {
