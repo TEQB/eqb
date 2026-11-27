@@ -306,7 +306,19 @@ export async function GET(req: NextRequest) {
         const facultyFilter = req.nextUrl.searchParams.get("faculty_id");
         const programmeFilter = req.nextUrl.searchParams.get("programme_id");
         const levelFilter = req.nextUrl.searchParams.get("level");
+        const statusFilter = req.nextUrl.searchParams.get("status");
         const search = req.nextUrl.searchParams.get("search");
+        const page = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") || "1", 10));
+        const pageSize = 20;
+        const offset = (page - 1) * pageSize;
+
+        // Lazy-clear expired timed locks so they show as active again
+        await service
+          .from("profiles")
+          .update({ is_locked: false, lock_reason: null, lock_expires_at: null } as never)
+          .eq("is_locked", true)
+          .not("lock_expires_at", "is", null)
+          .lt("lock_expires_at", new Date().toISOString());
 
         let programmeIds: string[] | undefined;
         if (facultyFilter && validateUUID(facultyFilter)) {
@@ -322,8 +334,14 @@ export async function GET(req: NextRequest) {
 
         let query = service
           .from("profiles")
-          .select("id, full_name, matric_number, is_locked, lock_reason, current_level, created_at, programme_id")
+          .select("id, full_name, matric_number, is_locked, lock_expires_at, lock_reason, current_level, created_at, programme_id", { count: "exact" })
           .eq("role", "student");
+
+        if (statusFilter === "locked") {
+          query = query.eq("is_locked", true);
+        } else if (statusFilter === "active") {
+          query = query.eq("is_locked", false);
+        }
 
         if (programmeIds && programmeIds.length > 0) {
           query = query.in("programme_id", programmeIds);
@@ -339,7 +357,9 @@ export async function GET(req: NextRequest) {
           query = query.or(`full_name.ilike.%${search}%,matric_number.ilike.%${search}%`);
         }
 
-        const { data: raw } = await query.order("created_at", { ascending: false });
+        const { data: raw, count } = await query
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
         // Build programme/faculty lookup map
         const programmeIdsToFetch = Array.from(new Set((raw ?? []).map((r: unknown) => (r as { programme_id: string }).programme_id).filter(Boolean)));
@@ -355,13 +375,14 @@ export async function GET(req: NextRequest) {
         }
 
         const students = (raw ?? []).map((r: unknown) => {
-          const s = r as { id: string; full_name: string; matric_number: string; is_locked: boolean; lock_reason: string | null; current_level: number; created_at: string; programme_id: string | null };
+          const s = r as { id: string; full_name: string; matric_number: string; is_locked: boolean; lock_expires_at: string | null; lock_reason: string | null; current_level: number; created_at: string; programme_id: string | null };
           const prog = s.programme_id ? progMap.get(s.programme_id) : null;
           return {
             id: s.id,
             full_name: s.full_name,
             matric_number: s.matric_number,
             is_locked: s.is_locked,
+            lock_expires_at: s.lock_expires_at,
             lock_reason: s.lock_reason,
             current_level: s.current_level,
             created_at: s.created_at,
@@ -370,7 +391,13 @@ export async function GET(req: NextRequest) {
             faculty_name: prog?.faculty_name || null,
           };
         });
-        return NextResponse.json({ students });
+        return NextResponse.json({
+          students,
+          total: count ?? 0,
+          page,
+          pageSize,
+          totalPages: Math.ceil((count ?? 0) / pageSize),
+        });
       }
 
       case "pending-count": {
@@ -1050,15 +1077,26 @@ export async function POST(req: NextRequest) {
       case "lock-student": {
         const id = formData.get("id") as string;
         const lock_reason = formData.get("lock_reason") as string || null;
+        const duration = formData.get("duration") as string || "forever";
         if (!id || !validateUUID(id)) {
           return NextResponse.json({ error: "Invalid student ID" }, { status: 400 });
         }
+        const DURATION_MS: Record<string, number> = {
+          "24h": 24 * 60 * 60 * 1000,
+          "72h": 72 * 60 * 60 * 1000,
+          "7d": 7 * 24 * 60 * 60 * 1000,
+          "30d": 30 * 24 * 60 * 60 * 1000,
+        };
+        const lockExpiresAt =
+          duration !== "forever" && DURATION_MS[duration]
+            ? new Date(Date.now() + DURATION_MS[duration]).toISOString()
+            : null;
         const { error } = await service
           .from("profiles")
-          .update({ is_locked: true, lock_reason } as never)
+          .update({ is_locked: true, lock_reason, lock_expires_at: lockExpiresAt } as never)
           .eq("id", id);
         if (error) throw error;
-        logger.info({ event: "admin.lock_student", message: "Student locked", userId: user.id, metadata: { studentId: id, lock_reason } });
+        logger.info({ event: "admin.lock_student", message: "Student locked", userId: user.id, metadata: { studentId: id, lock_reason, duration, lock_expires_at: lockExpiresAt } });
         return NextResponse.json({ success: true });
       }
 
@@ -1069,7 +1107,7 @@ export async function POST(req: NextRequest) {
         }
         const { error } = await service
           .from("profiles")
-          .update({ is_locked: false, lock_reason: null } as never)
+          .update({ is_locked: false, lock_reason: null, lock_expires_at: null } as never)
           .eq("id", id);
         if (error) throw error;
         logger.info({ event: "admin.unlock_student", message: "Student unlocked", userId: user.id, metadata: { studentId: id } });

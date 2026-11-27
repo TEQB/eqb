@@ -181,11 +181,16 @@ export async function middleware(request: NextRequest) {
     if (!isUploadRoute) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("is_locked")
+        .select("is_locked, lock_expires_at")
         .eq("auth_user_id", user.id)
         .single();
 
-      if (profile?.is_locked) {
+      const lockExpired =
+        profile?.lock_expires_at != null &&
+        new Date(profile.lock_expires_at).getTime() <= Date.now();
+      const effectivelyLocked = profile?.is_locked && !lockExpired;
+
+      if (effectivelyLocked) {
         console.log(
           `[EQB] ${JSON.stringify({ t: new Date().toISOString(), lvl: "info", ev: "auth.locked", msg: "Redirected locked user to upload", uid: user.id, p: pathname })}`,
         );

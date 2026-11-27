@@ -22,6 +22,7 @@ export interface StudentProfile {
   role: string;
   last_upload_at: string | null;
   is_locked: boolean;
+  lock_expires_at: string | null;
   lock_reason: string | null;
   created_at: string;
   programme: StudentProgramme | null;
@@ -40,6 +41,15 @@ export interface StudentCourseGroups {
   allCourses: StudentCourse[];
   generalCourses: StudentCourse[];
   programmeCourses: StudentCourse[];
+}
+
+export function isLockActive(profile: {
+  is_locked: boolean;
+  lock_expires_at?: string | null;
+}): boolean {
+  if (!profile.is_locked) return false;
+  if (!profile.lock_expires_at) return true;
+  return new Date(profile.lock_expires_at).getTime() > Date.now();
 }
 
 export async function loadStudentProfile(

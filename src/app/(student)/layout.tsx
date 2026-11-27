@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { StudentLayoutClient } from "./StudentLayoutClient";
 import {
+  isLockActive,
   loadStudentFeedbackCount,
   loadStudentProfile,
   loadUploadObligationDays,
@@ -37,7 +38,7 @@ export default async function StudentLayout({
         fullName: profile.full_name,
         programmeId: profile.programme_id,
         currentLevel: profile.current_level,
-        isLocked: profile.is_locked,
+        isLocked: isLockActive(profile),
         daysRemaining,
       }}
       feedbackCount={feedbackCount}

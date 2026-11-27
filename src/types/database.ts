@@ -423,6 +423,7 @@ export type Database = {
           id: string
           is_locked: boolean
           last_upload_at: string | null
+          lock_expires_at: string | null
           lock_reason: string | null
           matric_number: string | null
           phone_number: string | null
@@ -438,6 +439,7 @@ export type Database = {
           id?: string
           is_locked?: boolean
           last_upload_at?: string | null
+          lock_expires_at?: string | null
           lock_reason?: string | null
           matric_number?: string | null
           phone_number?: string | null
@@ -453,6 +455,7 @@ export type Database = {
           id?: string
           is_locked?: boolean
           last_upload_at?: string | null
+          lock_expires_at?: string | null
           lock_reason?: string | null
           matric_number?: string | null
           phone_number?: string | null
