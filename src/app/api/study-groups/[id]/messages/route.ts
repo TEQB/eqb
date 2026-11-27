@@ -239,7 +239,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const senderName = profile.full_name || profile.matric_number || "A member";
 
       // In-app notifications (notification bell + realtime)
-      await service.from("notifications").insert(
+      await (service as any).from("notifications").insert(
         (groupMembers as Array<{ profile_id: string }>).map((m) => ({
           user_id: m.profile_id,
           type: "group_message",

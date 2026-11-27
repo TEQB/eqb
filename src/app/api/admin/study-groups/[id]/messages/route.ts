@@ -125,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const senderName = profile.full_name || "EQB Admin";
       await Promise.all([
         // In-app notifications (notification bell + realtime)
-        service.from("notifications").insert(
+        (service as any).from("notifications").insert(
           memberIds.map((pid: string) => ({
             user_id: pid,
             type: "group_message",
